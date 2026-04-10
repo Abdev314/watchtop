@@ -102,7 +102,7 @@ At this point, applications may crash, fail to start, or silently stop monitorin
 
 ### Pre-built binaries
 
-*Coming soon – check [Releases](https://github.com/yourusername/watchtop/releases)*
+*Coming soon*
 
 ### Build from source (recommended)
 
