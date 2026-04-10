@@ -74,6 +74,8 @@ At this point, applications may crash, fail to start, or silently stop monitorin
 - Total active watches and usage percentage
 - Which processes are consuming watches
 - Detailed list of watched paths per process
+  
+![](assets/v1.0.png)
 
 With this visibility you can:
 
