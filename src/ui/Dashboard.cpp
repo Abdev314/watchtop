@@ -1,18 +1,19 @@
 #include "Dashboard.h"
 #include "ftxui/dom/elements.hpp"
 #include "ftxui/component/component.hpp"
-#include <memory>
+#include <algorithm>
 
 using namespace ftxui;
 
 Dashboard::Dashboard() {
+    watch_details_ = std::make_unique<WatchDetails>();
+    command_panel_ = std::make_unique<CommandPanel>();
+
     process_table_ = std::make_unique<ProcessTable>(
         [this](const ProcessWatchInfo& info) {
+            selected_pid_ = info.pid;
             watch_details_->SetProcess(info);
-        }
-    );
-
-    watch_details_ = std::make_unique<WatchDetails>();
+        });
 
     system_panel_ = Renderer([&] {
         double usage = limits_.usage_percent();
@@ -37,24 +38,36 @@ Dashboard::Dashboard() {
         return vbox(std::move(rows)) | border;
     });
 
-    // Create a container with the process table as the active, focusable child
-    auto container = Container::Vertical({
+    dashboard_container_ = Container::Vertical({
         system_panel_,
         process_table_->GetComponent(),
-        watch_details_->GetComponent()
+        watch_details_->GetComponent(),
+        command_panel_->GetComponent()
     });
 
-    // Set the process table as the focused child
-    container->SetActiveChild(process_table_->GetComponent());
+    dashboard_container_->SetActiveChild(process_table_->GetComponent());
 
-    // Main renderer
-    main_container_ = Renderer(container, [&] {
+    dashboard_container_ |= CatchEvent([&](Event event) {
+        if (event == Event::Tab) {
+            if (dashboard_container_->ActiveChild() == process_table_->GetComponent()) {
+                dashboard_container_->SetActiveChild(command_panel_->GetComponent());
+                command_panel_->Focus();
+            } else {
+                dashboard_container_->SetActiveChild(process_table_->GetComponent());
+            }
+            return true;
+        }
+        return false;
+    });
+
+    main_container_ = Renderer(dashboard_container_, [&] {
         return vbox({
             text(" WATCHTOP DASHBOARD ") | bold | center | border,
             system_panel_->Render() | flex,
             process_table_->GetComponent()->Render() | flex,
             watch_details_->GetComponent()->Render() | flex,
-            text("↑↓: Navigate  ↵: Inspect  r: Refresh  q: Quit") | dim | center
+            command_panel_->GetComponent()->Render() | size(HEIGHT, EQUAL, 15),
+            text("↑↓: Navigate Table  ↵: Inspect  Tab: Toggle Panel  r: Refresh  q: Quit") | dim | center
         }) | size(HEIGHT, EQUAL, Terminal::Size().dimy);
     });
 
@@ -73,5 +86,19 @@ void Dashboard::RefreshData() {
     limits_.current_watches = total;
 
     process_table_->UpdateData(processes_);
-    watch_details_->Clear();
+
+    if (!selected_pid_.has_value()) {
+        watch_details_->Clear();
+        return;
+    }
+
+    auto it = std::find_if(processes_.begin(), processes_.end(),
+        [&](const ProcessWatchInfo& p) { return p.pid == *selected_pid_; });
+
+    if (it == processes_.end()) {
+        selected_pid_.reset();
+        watch_details_->Clear();
+    } else {
+        watch_details_->SetProcess(*it);
+    }
 }

@@ -22,6 +22,10 @@ add_executable(watchtop
   src/ui/Dashboard.cpp
   src/ui/ProcessTable.cpp
   src/ui/WatchDetails.cpp
+  src/ui/CommandPanel.cpp
+
+
+  
 )
 
 target_include_directories(watchtop PRIVATE src)

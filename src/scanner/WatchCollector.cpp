@@ -1,9 +1,9 @@
 #include "WatchCollector.h"
+#include "ProcScanner.h"
 #include <filesystem>
 #include <fstream>
 #include <unistd.h>
 #include <limits.h>
-#include <iostream>   
 
 namespace fs = std::filesystem;
 
@@ -22,8 +22,6 @@ std::vector<ProcessWatchInfo> WatchCollector::collect() {
     std::vector<ProcessWatchInfo> result;
     auto processes = ProcScanner::scan();
 
-    std::cerr << "[DEBUG] Found " << processes.size() << " processes\n";
-
     for (const auto& proc : processes) {
         ProcessWatchInfo info;
         info.pid = proc.pid;
@@ -31,12 +29,11 @@ std::vector<ProcessWatchInfo> WatchCollector::collect() {
 
         std::string fd_dir = "/proc/" + std::to_string(proc.pid) + "/fd";
         std::error_code ec;
-        if (!fs::exists(fd_dir, ec) || !fs::is_directory(fd_dir, ec)) {
-            continue; // Skip processes we can't access (permissions)
-        }
+        if (!fs::exists(fd_dir, ec) || !fs::is_directory(fd_dir, ec))
+            continue;
 
         for (const auto& entry : fs::directory_iterator(fd_dir, ec)) {
-            if (ec) break; // Stop on error
+            if (ec) break;
             if (!entry.is_symlink()) continue;
 
             std::string fd_name = entry.path().filename().string();
@@ -53,10 +50,8 @@ std::vector<ProcessWatchInfo> WatchCollector::collect() {
             }
         }
         info.watch_count = info.watches.size();
-        if (info.watch_count > 0) {
+        if (info.watch_count > 0)
             result.push_back(std::move(info));
-        }
     }
-    std::cerr << "[DEBUG] Collected " << result.size() << " processes with watches\n";
     return result;
 }
