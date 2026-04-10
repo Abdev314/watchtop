@@ -74,8 +74,10 @@ At this point, applications may crash, fail to start, or silently stop monitorin
 - Total active watches and usage percentage
 - Which processes are consuming watches
 - Detailed list of watched paths per process
-
-With this visibility you can:
+  
+  ![](assets/v1.0.png)
+  
+  With this visibility you can:
 
 - 🔍 Identify misbehaving or over-watching processes
 - 🧹 Clean up unnecessary watches
@@ -100,7 +102,7 @@ With this visibility you can:
 
 ### Pre-built binaries
 
-*Coming soon – check [Releases](https://github.com/yourusername/watchtop/releases)*
+*Coming soon*
 
 ### Build from source (recommended)
 
