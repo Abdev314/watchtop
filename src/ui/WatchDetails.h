@@ -5,7 +5,7 @@
 
 class WatchDetails {
 public:
-    WatchDetails();  // <-- Add explicit constructor declaration
+    WatchDetails();  
     ftxui::Component GetComponent();
     void SetProcess(std::optional<ProcessWatchInfo> info);
     void Clear();

@@ -17,7 +17,7 @@ public:
     std::optional<int> SelectedPid() const;
 
 private:
-    friend class ProcessTableComponent;  // allow access to private members
+    friend class ProcessTableComponent;  
 
     std::vector<ProcessWatchInfo> data_;
     int selected_index_ = -1;

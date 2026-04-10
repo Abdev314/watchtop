@@ -21,7 +21,6 @@ static std::unordered_set<int> getSocketInodesForPid(int pid) {
         if (len <= 0) continue;
         target[len] = '\0';
         std::string targetStr(target);
-        // Look for "socket:[inode]"
         if (targetStr.find("socket:[") == 0) {
             int inode = std::stoi(targetStr.substr(8, targetStr.size()-9));
             inodes.insert(inode);
@@ -57,15 +56,11 @@ std::unordered_map<int, std::vector<std::string>> PortScanner::scanListeningPort
             std::vector<std::string> tokens;
             while (iss >> token) tokens.push_back(token);
             if (tokens.size() < 10) continue;
-            // State is tokens[3] (e.g., "0A" for LISTEN)
-            if (tokens[3] != "0A") continue; // 0A = TCP_LISTEN
-            // Local address: tokens[1] (hex IP:port)
+            if (tokens[3] != "0A") continue; 
             size_t colon = tokens[1].rfind(':');
             if (colon == std::string::npos) continue;
             uint16_t port = std::stoi(tokens[1].substr(colon+1), nullptr, 16);
-            // inode is tokens[9]
             int inode = std::stoi(tokens[9]);
-            // Find which PID owns this socket
             for (auto& [pid, inodes] : pidToInodes) {
                 if (inodes.count(inode)) {
                     result[pid].push_back(std::to_string(port));
@@ -77,7 +72,5 @@ std::unordered_map<int, std::vector<std::string>> PortScanner::scanListeningPort
 
     parseNetFile("/proc/net/tcp", "tcp");
     parseNetFile("/proc/net/tcp6", "tcp6");
-    // Optionally parse UDP files ("/proc/net/udp", "/proc/net/udp6") if needed.
-
     return result;
 }

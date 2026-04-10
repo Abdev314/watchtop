@@ -6,7 +6,7 @@
 
 using namespace ftxui;
 
-static constexpr int kVisibleRows = 15; // max rows shown at once
+static constexpr int kVisibleRows = 15; 
 
 class ProcessTableComponent : public ComponentBase {
 public:
@@ -21,7 +21,6 @@ public:
         const int   total    = static_cast<int>(data.size());
 
         // ── Compute the visible window ────────────────────────────────────
-        // Keep the selected row centred, clamped to valid bounds.
         int half   = kVisibleRows / 2;
         int win_start = sel - half;
         int win_end   = win_start + kVisibleRows;
@@ -104,7 +103,7 @@ private:
     ProcessTable* parent_;
 };
 
-// ── ProcessTable ─────────────────────────────────────────────────────────────
+// ── ProcessTable ──────────────────────────────────────────────────────
 
 ProcessTable::ProcessTable(SelectionCallback on_select)
     : on_select_(std::move(on_select)) {

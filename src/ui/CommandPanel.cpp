@@ -55,9 +55,6 @@ public:
     }
 
     bool OnEvent(Event event) override {
-        // ✅ NO focused_ guard here — FTXUI only calls OnEvent when this
-        // component is active; guarding on focused_ blocks typing entirely.
-
         if (event == Event::ArrowUp) {
             if (!parent_->command_history_.empty() && parent_->history_index_ > 0) {
                 parent_->history_index_--;
@@ -88,8 +85,6 @@ private:
     Component     input_component_;
     std::string   input_;
 };
-
-// ─────────────────────────────────────────────
 
 CommandPanel::CommandPanel() {
     container_ = Make<CommandPanelImpl>(this);

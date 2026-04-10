@@ -125,7 +125,6 @@ void Dashboard::RefreshData() {
             continue;
         }
 
-        // Match PID
         if (std::to_string(p.pid).find(lowerFilter) != std::string::npos) {
             filtered.push_back(p);
             continue;
@@ -140,7 +139,6 @@ void Dashboard::RefreshData() {
             continue;
         }
 
-        // Match any listening port
         bool portMatch = false;
         for (const auto& port : p.listening_ports) {
             std::string lowerPort = port;

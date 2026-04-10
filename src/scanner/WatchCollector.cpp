@@ -46,9 +46,6 @@ static std::set<uint64_t> collect_socket_inodes(int pid) {
 }
 
 // ── Parse /proc/net/tcp[6] into an inode→port map ────────────────────────────
-// Actual column layout (space-separated tokens):
-//   0:sl  1:local_addr  2:rem_addr  3:state  4:tx_queue:rx_queue
-//   5:tr:tm->when  6:retrnsmt  7:uid  8:timeout  9:inode
 static std::map<uint64_t, std::string> build_inode_port_map(const std::string& net_path) {
     std::map<uint64_t, std::string> inode_to_port;
     std::ifstream f(net_path);
@@ -70,12 +67,10 @@ static std::map<uint64_t, std::string> build_inode_port_map(const std::string& n
         }
         if (!ok) continue;
 
-        // token[3] is state — only LISTEN (0A)
         if (tokens[3] != "0A") continue;
 
-        // token[1] is local_addr: "hex_ip:hex_port"
         const std::string& local = tokens[1];
-        auto colon = local.rfind(':'); // rfind handles IPv6 which has multiple colons
+        auto colon = local.rfind(':'); 
         if (colon == std::string::npos) continue;
 
         int port = 0;
@@ -85,7 +80,6 @@ static std::map<uint64_t, std::string> build_inode_port_map(const std::string& n
 
         if (port <= 0 || port > 65535) continue;
 
-        // token[9] is inode (decimal)
         uint64_t inode = 0;
         try {
             inode = std::stoull(tokens[9]);
