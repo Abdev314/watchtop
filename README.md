@@ -75,8 +75,17 @@ At this point, applications may crash, fail to start, or silently stop monitorin
 - Which processes are consuming watches
 - Detailed list of watched paths per process
   
-  ![](assets/v1.1.png)
-  
+  ![](assets/v1.2.png)
+
+  **Search by PID**
+  ![](assets/Search_by_PID.png)
+
+  **Search by port**
+  ![](assets/Search_by_port.png)
+
+  **Search by process name**
+  ![](assets/Search_by_process_name.png)
+
   With this visibility you can:
 
 - 🔍 Identify misbehaving or over-watching processes
