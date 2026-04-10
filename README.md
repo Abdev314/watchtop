@@ -216,5 +216,5 @@ Distributed under the **MIT License**. See `LICENSE` for more information.
 ---
 
 <p align="center">
-  Made with ❤️ for Linux users who hit the inotify limit one too many times.
+  Made with ❤️ for Linux users.
 </p>
