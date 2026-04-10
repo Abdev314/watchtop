@@ -5,11 +5,11 @@
 #include <sstream>
 #include <unistd.h>
 #include <limits.h>
-#include <set> 
+#include <set>
+#include <map>
 
 namespace fs = std::filesystem;
 
-// ── Resolve an fd symlink to its target path ─────────────────────────────────
 static std::string resolve_fd_path(int pid, const std::string& fd) {
     std::string link_path = "/proc/" + std::to_string(pid) + "/fd/" + fd;
     char buf[PATH_MAX];
@@ -21,73 +21,90 @@ static std::string resolve_fd_path(int pid, const std::string& fd) {
     return {};
 }
 
-// ── Collect all inodes that this process has open sockets for ────────────────
-// by reading /proc/<pid>/fd/ and collecting entries like "socket:[inode]"
 static std::set<uint64_t> collect_socket_inodes(int pid) {
     std::set<uint64_t> inodes;
     std::string fd_dir = "/proc/" + std::to_string(pid) + "/fd";
-    std::error_code ec;
 
+    std::error_code ec;
     for (const auto& entry : fs::directory_iterator(fd_dir, ec)) {
         if (ec) break;
         char buf[PATH_MAX];
-        std::string path = entry.path().string();
-        ssize_t len = readlink(path.c_str(), buf, sizeof(buf) - 1);
+        ssize_t len = readlink(entry.path().c_str(), buf, sizeof(buf) - 1);
         if (len <= 0) continue;
         buf[len] = '\0';
-        std::string target(buf);
-        // Socket symlinks look like "socket:[1234567]"
-        if (target.rfind("socket:[", 0) == 0 && target.back() == ']') {
-            try {
-                uint64_t inode = std::stoull(target.substr(8, target.size() - 9));
-                inodes.insert(inode);
-            } catch (...) {}
-        }
+        std::string target(buf, len);
+
+        if (target.substr(0, 8) != "socket:[") continue;
+        if (target.back() != ']') continue;
+
+        try {
+            uint64_t inode = std::stoull(target.substr(8, target.size() - 9));
+            inodes.insert(inode);
+        } catch (...) {}
     }
     return inodes;
 }
 
-// ── Parse /proc/<pid>/net/tcp[6] for LISTEN rows ─────────────────────────────
-// Returns ports (as strings) whose inodes are in the provided set.
-// tcp format columns: sl local_addr rem_addr state tx:rx uid timeout inode ...
-static std::vector<std::string> parse_tcp_ports(int pid,
-                                                 const std::string& net_file,
-                                                 const std::set<uint64_t>& inodes) {
-    std::vector<std::string> ports;
-    std::ifstream f("/proc/" + std::to_string(pid) + "/" + net_file);
-    if (!f.is_open()) return ports;
+// ── Parse /proc/net/tcp[6] into an inode→port map ────────────────────────────
+// Actual column layout (space-separated tokens):
+//   0:sl  1:local_addr  2:rem_addr  3:state  4:tx_queue:rx_queue
+//   5:tr:tm->when  6:retrnsmt  7:uid  8:timeout  9:inode
+static std::map<uint64_t, std::string> build_inode_port_map(const std::string& net_path) {
+    std::map<uint64_t, std::string> inode_to_port;
+    std::ifstream f(net_path);
+    if (!f.is_open()) return inode_to_port;
 
     std::string line;
     std::getline(f, line); // skip header
 
     while (std::getline(f, line)) {
+        if (line.empty()) continue;
+
         std::istringstream iss(line);
-        std::string sl, local_addr, rem_addr, state;
-        std::string tx_rx, uid, timeout;
-        uint64_t inode;
+        std::string tokens[10];
 
-        iss >> sl >> local_addr >> rem_addr >> state >> tx_rx >> uid >> timeout >> inode;
+        // Read exactly 10 tokens — inode is token index 9
+        bool ok = true;
+        for (int i = 0; i < 10; ++i) {
+            if (!(iss >> tokens[i])) { ok = false; break; }
+        }
+        if (!ok) continue;
 
-        // state "0A" = TCP_LISTEN
-        if (state != "0A") continue;
-        if (inodes.find(inode) == inodes.end()) continue;
+        // token[3] is state — only LISTEN (0A)
+        if (tokens[3] != "0A") continue;
 
-        // local_addr is "hex_ip:hex_port" — extract port from after the colon
-        auto colon = local_addr.find(':');
+        // token[1] is local_addr: "hex_ip:hex_port"
+        const std::string& local = tokens[1];
+        auto colon = local.rfind(':'); // rfind handles IPv6 which has multiple colons
         if (colon == std::string::npos) continue;
 
+        int port = 0;
         try {
-            int port = std::stoi(local_addr.substr(colon + 1), nullptr, 16);
-            ports.push_back(std::to_string(port));
-        } catch (...) {}
+            port = std::stoi(local.substr(colon + 1), nullptr, 16);
+        } catch (...) { continue; }
+
+        if (port <= 0 || port > 65535) continue;
+
+        // token[9] is inode (decimal)
+        uint64_t inode = 0;
+        try {
+            inode = std::stoull(tokens[9]);
+        } catch (...) { continue; }
+
+        if (inode == 0) continue;
+
+        inode_to_port[inode] = std::to_string(port);
     }
-    return ports;
+    return inode_to_port;
 }
 
-// ── Main collect ──────────────────────────────────────────────────────────────
 std::vector<ProcessWatchInfo> WatchCollector::collect() {
     std::vector<ProcessWatchInfo> result;
     auto processes = ProcScanner::scan();
+
+    // Build once, reuse for all processes
+    auto inode_map_tcp4 = build_inode_port_map("/proc/net/tcp");
+    auto inode_map_tcp6 = build_inode_port_map("/proc/net/tcp6");
 
     for (const auto& proc : processes) {
         ProcessWatchInfo info;
@@ -124,17 +141,20 @@ std::vector<ProcessWatchInfo> WatchCollector::collect() {
             continue;
 
         // ── listening ports ───────────────────────────────────────────────
-        // Only do the port scan for processes that actually have watches,
-        // since we already filtered above.
         auto socket_inodes = collect_socket_inodes(proc.pid);
         if (!socket_inodes.empty()) {
-            auto tcp4 = parse_tcp_ports(proc.pid, "net/tcp",  socket_inodes);
-            auto tcp6 = parse_tcp_ports(proc.pid, "net/tcp6", socket_inodes);
-
-            // Merge, deduplicate
             std::set<std::string> seen;
-            for (const auto& p : tcp4) if (seen.insert(p).second) info.listening_ports.push_back(p);
-            for (const auto& p : tcp6) if (seen.insert(p).second) info.listening_ports.push_back(p);
+            for (uint64_t inode : socket_inodes) {
+                auto it4 = inode_map_tcp4.find(inode);
+                if (it4 != inode_map_tcp4.end())
+                    if (seen.insert(it4->second).second)
+                        info.listening_ports.push_back(it4->second);
+
+                auto it6 = inode_map_tcp6.find(inode);
+                if (it6 != inode_map_tcp6.end())
+                    if (seen.insert(it6->second).second)
+                        info.listening_ports.push_back(it6->second);
+            }
         }
 
         result.push_back(std::move(info));
