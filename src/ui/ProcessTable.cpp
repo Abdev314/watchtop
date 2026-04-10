@@ -29,10 +29,12 @@ public:
         auto table = Table(table_content);
         table.SelectAll().Border(LIGHT);
         table.SelectRow(0).Decorate(bold);
-        table.SelectColumn(0).DecorateCells(align_right);
+        table.SelectColumn(0).DecorateCells(align_right | size(WIDTH, EQUAL, 5));
         table.SelectColumn(1).DecorateCells(size(WIDTH, EQUAL, 2));
-        table.SelectColumn(2).DecorateCells(size(WIDTH, GREATER_THAN, 30) | flex);
-        table.SelectColumn(3).DecorateCells(align_right);
+        table.SelectColumn(2).DecorateCells(size(WIDTH, GREATER_THAN, 30));
+        table.SelectColumn(3).DecorateCells(align_right | size(WIDTH, EQUAL, 5));
+
+        
 
         if (parent_->selected_index_ >= 0 && parent_->selected_index_ < static_cast<int>(parent_->data_.size())) {
             table.SelectRow(parent_->selected_index_ + 1)
