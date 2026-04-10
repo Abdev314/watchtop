@@ -35,9 +35,18 @@ Dashboard::Dashboard() {
                                                        color(usage > 80 ? Color::Red : Color::White)}));
         if (usage > 80)
             rows.push_back(text("WARNING: Watch usage above 80%") | color(Color::Red) | bold);
+        
+        rows.push_back(separator());
+        auto now = std::chrono::system_clock::now();
+        std::time_t now_c = std::chrono::system_clock::to_time_t(now);
+        std::string time_str = std::ctime(&now_c);
+        time_str.pop_back(); // remove newline
+        rows.push_back(text("Last refresh: " + time_str) | dim);
+        
         return vbox(std::move(rows)) | border;
-    });
 
+    });
+    
     dashboard_container_ = Container::Vertical({
         system_panel_,
         process_table_->GetComponent(),

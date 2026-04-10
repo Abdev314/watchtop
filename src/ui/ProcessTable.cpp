@@ -11,11 +11,16 @@ public:
     explicit ProcessTableComponent(ProcessTable* parent) : parent_(parent) {}
 
     Element Render() override {
+        if (parent_->data_.empty()) {
+            return text(" No processes with inotify watches found ") | center | border;
+        }
+
         std::vector<std::vector<std::string>> table_content;
-        table_content.push_back({"PID", "Process", "Watches"});
+        table_content.push_back({"PID", "", "Process", "Watches"});
         for (const auto& p : parent_->data_) {
             table_content.push_back({
                 std::to_string(p.pid),
+                "",
                 p.name,
                 std::to_string(p.watch_count)
             });
@@ -25,7 +30,9 @@ public:
         table.SelectAll().Border(LIGHT);
         table.SelectRow(0).Decorate(bold);
         table.SelectColumn(0).DecorateCells(align_right);
-        table.SelectColumn(2).DecorateCells(align_right);
+        table.SelectColumn(1).DecorateCells(size(WIDTH, EQUAL, 2));
+        table.SelectColumn(2).DecorateCells(size(WIDTH, GREATER_THAN, 30) | flex);
+        table.SelectColumn(3).DecorateCells(align_right);
 
         if (parent_->selected_index_ >= 0 && parent_->selected_index_ < static_cast<int>(parent_->data_.size())) {
             table.SelectRow(parent_->selected_index_ + 1)
