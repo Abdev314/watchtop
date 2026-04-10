@@ -14,7 +14,6 @@ std::vector<ProcessInfo> ProcScanner::scan() {
         if (!entry.is_directory()) continue;
 
         std::string dirname = entry.path().filename().string();
-        // Check if directory name is numeric (PID)
         if (dirname.empty() || !std::all_of(dirname.begin(), dirname.end(), ::isdigit))
             continue;
 
@@ -23,7 +22,6 @@ std::vector<ProcessInfo> ProcScanner::scan() {
         std::ifstream comm_file(comm_path);
         std::string name;
         if (std::getline(comm_file, name)) {
-            // Remove trailing newline if any
             if (!name.empty() && name.back() == '\n')
                 name.pop_back();
             processes.push_back({pid, std::move(name)});

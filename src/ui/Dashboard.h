@@ -13,6 +13,7 @@ public:
     Dashboard();
     ftxui::Component GetComponent();
     void RefreshData();
+    
 
 private:
     InotifyLimits limits_;
@@ -25,4 +26,7 @@ private:
     ftxui::Component dashboard_container_;
     ftxui::Component main_container_;
     ftxui::Component system_panel_;
+    
+    std::string search_filter_;
+    ftxui::Component search_input_;
 };

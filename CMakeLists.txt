@@ -23,10 +23,9 @@ add_executable(watchtop
   src/ui/ProcessTable.cpp
   src/ui/WatchDetails.cpp
   src/ui/CommandPanel.cpp
-
-
-  
+  src/scanner/PortScanner.cpp
 )
+  
 
 target_include_directories(watchtop PRIVATE src)
 target_link_libraries(watchtop PRIVATE ftxui::screen ftxui::dom ftxui::component)

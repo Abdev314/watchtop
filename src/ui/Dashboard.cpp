@@ -10,6 +10,7 @@ using namespace ftxui;
 Dashboard::Dashboard() {
     watch_details_ = std::make_unique<WatchDetails>();
     command_panel_ = std::make_unique<CommandPanel>();
+    search_input_  = Input(&search_filter_, "Search by PID, name or port...");
 
     process_table_ = std::make_unique<ProcessTable>(
         [this](const ProcessWatchInfo& info) {
@@ -37,7 +38,7 @@ Dashboard::Dashboard() {
                                                        color(usage > 80 ? Color::Red : Color::White)}));
         if (usage > 80)
             rows.push_back(text("WARNING: Watch usage above 80%") | color(Color::Red) | bold);
-        
+
         rows.push_back(separator());
         auto now = std::chrono::system_clock::now();
         std::time_t now_c = std::chrono::system_clock::to_time_t(now);
@@ -45,12 +46,12 @@ Dashboard::Dashboard() {
         if (!time_str.empty() && time_str.back() == '\n')
             time_str.pop_back();
         rows.push_back(text("Last refresh: " + time_str) | dim);
-        
+
         return vbox(std::move(rows)) | border;
     });
 
-    // Only focusable components — system_panel_ stays render-only
     dashboard_container_ = Container::Vertical({
+        search_input_,
         process_table_->GetComponent(),
         watch_details_->GetComponent(),
         command_panel_->GetComponent()
@@ -58,30 +59,47 @@ Dashboard::Dashboard() {
 
     dashboard_container_->SetActiveChild(process_table_->GetComponent());
 
-    // Single definition of main_container_ with the side-by-side layout
     main_container_ = Renderer(dashboard_container_, [&] {
         return vbox({
             text(" WATCHTOP DASHBOARD ") | bold | center | border,
             system_panel_->Render(),
+            hbox({
+                text(" 🔍 "),
+                search_input_->Render() | flex
+            }) | border,
             hbox({
                 process_table_->GetComponent()->Render() | flex | size(WIDTH, GREATER_THAN, 45),
                 separator(),
                 watch_details_->GetComponent()->Render() | flex | size(WIDTH, GREATER_THAN, 40),
             }) | flex,
             command_panel_->GetComponent()->Render() | size(HEIGHT, EQUAL, 15),
-            text("↑↓: Navigate Table  ↵: Inspect  Tab: Toggle Panel  r: Refresh  q: Quit") | dim | center
+            text("↑↓: Navigate  ↵: Inspect  Tab: Switch Focus  /: Search  r: Refresh  q: Quit") | dim | center
         }) | size(HEIGHT, EQUAL, Terminal::Size().dimy);
     });
 
     main_container_ |= CatchEvent([&](Event event) {
         if (event == Event::Tab) {
             auto active = dashboard_container_->ActiveChild();
-            if (active == process_table_->GetComponent()) {
-                dashboard_container_->SetActiveChild(command_panel_->GetComponent());
-            } else {
+            if (active == search_input_) {
+                command_panel_->Unfocus();
                 dashboard_container_->SetActiveChild(process_table_->GetComponent());
                 process_table_->GetComponent()->TakeFocus();
+            } else if (active == process_table_->GetComponent()) {
+                command_panel_->Unfocus();
+                dashboard_container_->SetActiveChild(command_panel_->GetComponent());
+                command_panel_->Focus();
+            } else {
+                // leaving command panel → go to search
+                command_panel_->Unfocus();
+                dashboard_container_->SetActiveChild(search_input_);
+                search_input_->TakeFocus();
             }
+            return true;
+        }
+        if (event == Event::Character('/')) {
+            command_panel_->Unfocus();
+            dashboard_container_->SetActiveChild(search_input_);
+            search_input_->TakeFocus();
             return true;
         }
         return false;
@@ -93,8 +111,53 @@ Dashboard::Dashboard() {
 ftxui::Component Dashboard::GetComponent() { return main_container_; }
 
 void Dashboard::RefreshData() {
-    limits_ = SystemLimits::read();
-    processes_ = WatchCollector::collect();
+    limits_      = SystemLimits::read();
+    auto allProcesses = WatchCollector::collect();
+
+    std::string lowerFilter = search_filter_;
+    std::transform(lowerFilter.begin(), lowerFilter.end(),
+                   lowerFilter.begin(), ::tolower);
+
+    std::vector<ProcessWatchInfo> filtered;
+    for (const auto& p : allProcesses) {
+        if (lowerFilter.empty()) {
+            filtered.push_back(p);
+            continue;
+        }
+
+        // Match PID
+        if (std::to_string(p.pid).find(lowerFilter) != std::string::npos) {
+            filtered.push_back(p);
+            continue;
+        }
+
+        // Match process name
+        std::string lowerName = p.name;
+        std::transform(lowerName.begin(), lowerName.end(),
+                       lowerName.begin(), ::tolower);
+        if (lowerName.find(lowerFilter) != std::string::npos) {
+            filtered.push_back(p);
+            continue;
+        }
+
+        // Match any listening port
+        bool portMatch = false;
+        for (const auto& port : p.listening_ports) {
+            std::string lowerPort = port;
+            std::transform(lowerPort.begin(), lowerPort.end(),
+                           lowerPort.begin(), ::tolower);
+            if (lowerPort.find(lowerFilter) != std::string::npos) {
+                portMatch = true;
+                break;
+            }
+        }
+        if (portMatch) {
+            filtered.push_back(p);
+            continue;
+        }
+    }
+
+    processes_ = std::move(filtered);
 
     uint64_t total = 0;
     for (const auto& p : processes_)

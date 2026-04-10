@@ -12,6 +12,8 @@ struct ProcessWatchInfo {
     size_t watch_count = 0;
     std::vector<WatchDescriptor> watches;      // raw watch data
     std::unordered_map<int, std::string> wd_to_path; // resolved path for each wd
+    std::vector<std::string> listening_ports;   
+
 };
 
 class WatchCollector {

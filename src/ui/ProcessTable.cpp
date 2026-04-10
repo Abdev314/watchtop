@@ -37,15 +37,25 @@ public:
 
         // ── Build table content (header + visible slice) ──────────────────
         std::vector<std::vector<std::string>> table_content;
-        table_content.push_back({"PID", "", "Process", "Watches"});
+        table_content.push_back({"PID", "", "Process", "Watches", "Ports"});
 
         for (int i = win_start; i < win_end; ++i) {
             const auto& p = data[i];
+
+            // Join ports into a single comma-separated string
+            std::string ports;
+            for (size_t j = 0; j < p.listening_ports.size(); ++j) {
+                if (j > 0) ports += ", ";
+                ports += p.listening_ports[j];
+            }
+            if (ports.empty()) ports = "-";
+
             table_content.push_back({
                 std::to_string(p.pid),
                 "",
                 p.name,
-                std::to_string(p.watch_count)
+                std::to_string(p.watch_count),
+                ports
             });
         }
 
@@ -56,6 +66,10 @@ public:
         table.SelectColumn(1).DecorateCells(size(WIDTH, EQUAL, 2));
         table.SelectColumn(2).DecorateCells(size(WIDTH, GREATER_THAN, 30));
         table.SelectColumn(3).DecorateCells(align_right | size(WIDTH, EQUAL, 7));
+        // table.SelectColumn(4).DecorateCells(size(WIDTH, GREATER_THAN, 30));
+        table.SelectColumn(4).DecorateCells(align_right | size(WIDTH, EQUAL, 12));
+
+
 
         // ── Highlight selected row (offset by 1 for header) ───────────────
         if (sel >= win_start && sel < win_end) {
