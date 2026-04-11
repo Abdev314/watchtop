@@ -21,7 +21,7 @@ Dashboard::Dashboard() {
     system_panel_ = Renderer([&] {
         double usage = limits_.usage_percent();
         std::string bar;
-        int filled = static_cast<int>(usage / 10);
+        int filled = static_cast<int>(usage / 10.0);
         for (int i = 0; i < 10; ++i)
             bar += (i < filled) ? '#' : ' ';
         std::string usage_bar = "[" + bar + "]";
@@ -113,7 +113,7 @@ ftxui::Component Dashboard::GetComponent() { return main_container_; }
 void Dashboard::RefreshData() {
     limits_      = SystemLimits::read();
     auto allProcesses = WatchCollector::collect();
-
+    
     std::string lowerFilter = search_filter_;
     std::transform(lowerFilter.begin(), lowerFilter.end(),
                    lowerFilter.begin(), ::tolower);
@@ -155,6 +155,14 @@ void Dashboard::RefreshData() {
         }
     }
 
+    auto leakStatus = leak_detector_.update(filtered);
+    for (auto& p : filtered) {
+        auto it = leakStatus.find(p.pid);
+        if (it != leakStatus.end()) {
+            p.is_leaking = it->second.is_leaking;
+            p.leak_rate = it->second.leak_rate;
+        }
+    }
     processes_ = std::move(filtered);
 
     uint64_t total = 0;

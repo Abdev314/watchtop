@@ -7,6 +7,7 @@
 #include "CommandPanel.h"
 #include "../system/SystemLimits.h"
 #include "../scanner/WatchCollector.h"
+#include "../scanner/LeakDetector.h"
 
 class Dashboard {
 public:
@@ -29,4 +30,7 @@ private:
     
     std::string search_filter_;
     ftxui::Component search_input_;
+
+    LeakDetector leak_detector_;
+
 };

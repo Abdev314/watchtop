@@ -41,6 +41,13 @@ public:
         for (int i = win_start; i < win_end; ++i) {
             const auto& p = data[i];
 
+
+            Color row_color = Color::White;
+            if (p.is_leaking) {
+                row_color = Color::Yellow;   // or Color::Red for severe
+            }
+
+
             // Join ports into a single comma-separated string
             std::string ports;
             for (size_t j = 0; j < p.listening_ports.size(); ++j) {
@@ -57,6 +64,7 @@ public:
                 ports
             });
         }
+
 
         auto table = Table(table_content);
         table.SelectAll().Border(LIGHT);
@@ -77,6 +85,23 @@ public:
                  .DecorateCells(bgcolor(Color::Cyan) | color(Color::Black));
         }
 
+        // ─── ADD LEAK HIGHLIGHTING HERE ─────────────────────────────────
+        // Highlight selected row (priority over leak color)
+        if (sel >= win_start && sel < win_end) {
+            int table_row = (sel - win_start) + 1;  // +1 for header
+            table.SelectRow(table_row)
+                .DecorateCells(bgcolor(Color::Cyan) | color(Color::Black));
+        }
+
+        // Apply yellow text to leaking rows (only if not selected)
+        for (int i = win_start; i < win_end; ++i) {
+            if (data[i].is_leaking && i != sel) {
+                int table_row = (i - win_start) + 1;
+                table.SelectRow(table_row).DecorateCells(color(Color::Yellow));
+            }
+        }
+
+        
         // ── Scroll indicator: position / total ────────────────────────────
         std::string scroll_info = std::to_string(sel + 1) + "/" + std::to_string(total);
 

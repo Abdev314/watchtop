@@ -17,3 +17,4 @@ InotifyLimits SystemLimits::read() {
     limits.max_queued_events  = read_uint64_from_file("/proc/sys/fs/inotify/max_queued_events");
     return limits;
 }
+
