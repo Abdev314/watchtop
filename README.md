@@ -129,7 +129,7 @@ make -j$(nproc)
 sudo make install   # optional
 ```
 
-Run without installing:
+Run:
 
 ```bash
 ./watchtop
@@ -170,33 +170,6 @@ The dashboard is divided into four main areas:
 
 ---
 
-## Building from Source
-
-### Dependencies
-- **FTXUI** – Header-only TUI library (automatically fetched by CMake)
-
-### Build steps
-
-```bash
-git clone https://github.com/yourusername/watchtop.git
-cd watchtop
-mkdir build && cd build
-cmake -DCMAKE_BUILD_TYPE=Release ..
-make -j$(nproc)
-```
-
-The executable `watchtop` will be placed in the `build/` directory.
-
-### Install system‑wide (optional)
-
-```bash
-sudo make install
-```
-
-This copies `watchtop` to `/usr/local/bin`.
-
----
-
 ## Contributing
 
 Contributions are welcome! Please open an issue to discuss proposed changes before submitting a pull request.
@@ -216,5 +189,5 @@ Distributed under the **MIT License**. See `LICENSE` for more information.
 ---
 
 <p align="center">
-  Made with ❤️ for Linux users who hit the inotify limit one too many times.
+  Made with ❤️ for Linux users.
 </p>
