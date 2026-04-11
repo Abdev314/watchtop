@@ -129,7 +129,7 @@ make -j$(nproc)
 sudo make install   # optional
 ```
 
-Run without installing:
+Run:
 
 ```bash
 ./watchtop
