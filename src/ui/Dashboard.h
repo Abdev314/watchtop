@@ -8,6 +8,9 @@
 #include "../system/SystemLimits.h"
 #include "../scanner/WatchCollector.h"
 #include "../scanner/LeakDetector.h"
+#include "../scanner/LeakDetector.h" 
+#include "HistoryTracker.h"
+
 
 class Dashboard {
 public:
@@ -32,5 +35,8 @@ private:
     ftxui::Component search_input_;
 
     LeakDetector leak_detector_;
+
+    HistoryTracker history_tracker_;
+
 
 };

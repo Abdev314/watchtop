@@ -102,15 +102,19 @@ public:
         }
 
         
-        // ── Scroll indicator: position / total ────────────────────────────
+        // // ── Scroll indicator: position / total ────────────────────────────
         std::string scroll_info = std::to_string(sel + 1) + "/" + std::to_string(total);
 
         return vbox({
-            table.Render(),
-            // Shows current position without relying on frame's focus scroll
+            table.Render() | yframe | vscroll_indicator,  // Removed flex
             text(" " + scroll_info + " ") | align_right | dim,
-        }) | flex;
+        })  
+           | size(HEIGHT, EQUAL, 30)   
+           | size(WIDTH, EQUAL, 60);   
+
     }
+
+
 
     bool OnEvent(Event event) override {
         if (event == Event::ArrowUp)

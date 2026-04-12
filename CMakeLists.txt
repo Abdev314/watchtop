@@ -25,6 +25,8 @@ add_executable(watchtop
   src/ui/CommandPanel.cpp
   src/scanner/PortScanner.cpp
   src/scanner/LeakDetector.cpp
+  src/ui/HistoryTracker.cpp
+
 
 )
   

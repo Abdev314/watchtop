@@ -4,10 +4,13 @@
 #include <algorithm>
 #include <chrono>  
 #include <ctime>    
-
+#include <iostream> 
+#include <fstream>
+#include <cstdlib>  
+#include "HistoryTracker.h"
 using namespace ftxui;
 
-Dashboard::Dashboard() {
+Dashboard::Dashboard(): history_tracker_(60) {
     watch_details_ = std::make_unique<WatchDetails>();
     command_panel_ = std::make_unique<CommandPanel>();
     search_input_  = Input(&search_filter_, "Search by PID, name or port...");
@@ -62,17 +65,24 @@ Dashboard::Dashboard() {
     main_container_ = Renderer(dashboard_container_, [&] {
         return vbox({
             text(" WATCHTOP DASHBOARD ") | bold | center | border,
-            system_panel_->Render(),
+            hbox({
+                system_panel_->Render() | size(WIDTH, EQUAL, 40), 
+                history_tracker_.render(limits_.max_user_watches) | border |  flex,
+            }) | flex,
             hbox({
                 text(" 🔍 "),
                 search_input_->Render() | flex
             }) | border,
+            // Inside the main vbox in Dashboard constructor
+
             hbox({
-                process_table_->GetComponent()->Render() | flex | size(WIDTH, GREATER_THAN, 45),
-                separator(),
-                watch_details_->GetComponent()->Render() | flex | size(WIDTH, GREATER_THAN, 40),
-            }) | flex,
-            command_panel_->GetComponent()->Render() | size(HEIGHT, EQUAL, 15),
+                process_table_->GetComponent()->Render() | yframe | flex | size(WIDTH, EQUAL, 60),  // Fixed width
+                    text("") | size(WIDTH, EQUAL, 2) | size(HEIGHT, EQUAL, 30),
+
+                watch_details_->GetComponent()->Render() | yframe | flex | size(WIDTH, EQUAL, 60),  // Same width
+            }) | size(HEIGHT, EQUAL, 30),
+
+            command_panel_->GetComponent()->Render() | size(HEIGHT, EQUAL, 8),
             text("↑↓: Navigate  ↵: Inspect  Tab: Switch Focus  /: Search  r: Refresh  q: Quit") | dim | center
         }) | size(HEIGHT, EQUAL, Terminal::Size().dimy);
     });
@@ -156,11 +166,13 @@ void Dashboard::RefreshData() {
     }
 
     auto leakStatus = leak_detector_.update(filtered);
+    bool any_leaking = false;                   
     for (auto& p : filtered) {
         auto it = leakStatus.find(p.pid);
         if (it != leakStatus.end()) {
             p.is_leaking = it->second.is_leaking;
             p.leak_rate = it->second.leak_rate;
+
         }
     }
     processes_ = std::move(filtered);
@@ -169,6 +181,8 @@ void Dashboard::RefreshData() {
     for (const auto& p : processes_)
         total += p.watch_count;
     limits_.current_watches = total;
+
+     history_tracker_.add_sample(total);
 
     process_table_->UpdateData(processes_);
 
