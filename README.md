@@ -182,12 +182,6 @@ Contributions are welcome! Please open an issue to discuss proposed changes befo
 
 ---
 
-## License
-
-Distributed under the **MIT License**. See `LICENSE` for more information.
-
----
-
 <p align="center">
-  Made with ❤️ for Linux users.
+  Made with ❤️ for Linux users
 </p>
