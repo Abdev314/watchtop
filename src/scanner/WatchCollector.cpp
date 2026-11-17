@@ -115,11 +115,22 @@ std::vector<ProcessWatchInfo> WatchCollector::collect() {
             if (ec) break;
             if (!entry.is_symlink()) continue;
 
-            std::string fd_name     = entry.path().filename().string();
-            std::string fdinfo_path = "/proc/" + std::to_string(proc.pid)
-                                    + "/fdinfo/" + fd_name;
+            char target[PATH_MAX];
+            ssize_t len = readlink(entry.path().c_str(), target, sizeof(target) - 1);
+            if (len <= 0) continue;
+            target[len] = '\0';
+
+            std::string_view fd_target(target, len);
+            if (fd_target.find("anon_inode:inotify") == std::string_view::npos)
+                continue;
+
+            const std::string fd_name = entry.path().filename().string();
+            const std::string fdinfo_path =
+                "/proc/" + std::to_string(proc.pid) + "/fdinfo/" + fd_name;
 
             auto watches = InotifyParser::parse_fdinfo(fdinfo_path);
+
+
             if (watches.empty()) continue;
 
             std::string resolved = resolve_fd_path(proc.pid, fd_name);
