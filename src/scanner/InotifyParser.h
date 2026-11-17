@@ -11,6 +11,6 @@ struct WatchDescriptor {
 };
 
 class InotifyParser {
-public:
-    static std::vector<WatchDescriptor> parse_fdinfo(const std::string& path);
+    public:
+        static std::vector<WatchDescriptor> parse_fdinfo(const std::string& path);
 };

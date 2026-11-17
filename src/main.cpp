@@ -19,7 +19,7 @@ int main() {
     auto screen = ScreenInteractive::Fullscreen();
     Dashboard dashboard;
     auto component = dashboard.GetComponent();
-
+    //hello this is neovim
     component |= CatchEvent([&](Event event) {
         if (event == Event::Character('q')) {
             running = false;

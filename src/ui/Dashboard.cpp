@@ -6,7 +6,6 @@
 #include <ctime>    
 #include <iostream> 
 #include <fstream>
-#include <cstdlib>  
 #include "HistoryTracker.h"
 using namespace ftxui;
 

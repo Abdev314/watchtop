@@ -4,13 +4,13 @@
 #include "../scanner/WatchCollector.h"
 
 class WatchDetails {
-public:
-    WatchDetails();  
-    ftxui::Component GetComponent();
-    void SetProcess(std::optional<ProcessWatchInfo> info);
-    void Clear();
+    public:
+        WatchDetails();  
+        ftxui::Component GetComponent();
+        void SetProcess(std::optional<ProcessWatchInfo> info);
+        void Clear();
 
-private:
-    std::optional<ProcessWatchInfo> current_process_;
-    ftxui::Component component_;
+    private:
+        std::optional<ProcessWatchInfo> current_process_;
+        ftxui::Component component_;
 };

@@ -12,7 +12,7 @@ WatchDetails::WatchDetails() {
         const auto& proc = current_process_.value();
         Elements rows;
         
-        // === FIXED HEADER (always visible, never scrolls) ===
+        // FIXED HEADER (always visible, never scrolls) 
         rows.push_back(text("Process: " + proc.name + " (PID: " + std::to_string(proc.pid) + ")") | bold);
         rows.push_back(separator());
         rows.push_back(text("Watch Descriptors") | bold);
@@ -22,7 +22,7 @@ WatchDetails::WatchDetails() {
         }));
         rows.push_back(separator());
 
-        // === SCROLLABLE WATCH LIST ===
+        // SCROLLABLE WATCH LIST 
         Elements watch_rows;
         for (const auto& wd : proc.watches) {
             std::string path = proc.wd_to_path.count(wd.wd) 
@@ -35,30 +35,24 @@ WatchDetails::WatchDetails() {
             }));
         }
 
-        // ✅ CRITICAL: Wrap ONLY the watch list in yframe + height limit
+        // CRITICAL: Wrap ONLY the watch list in yframe + height limit
         auto scrollable_content = vbox(std::move(watch_rows)) 
                                 | yframe 
                                 | vscroll_indicator;
 
-        rows.push_back(scrollable_content | flex);  // flex fills remaining space in parent
+        rows.push_back(scrollable_content | flex);  
 
-        // ✅ CRITICAL: Apply border FIRST, then size constraint
+        // CRITICAL: Apply border FIRST, then size constraint
         // This ensures the border stays tight and the container doesn't expand
         return vbox(std::move(rows)) 
              | border 
-             | size(HEIGHT, EQUAL, 20)   // ✅ Fixed height - prevents expansion
-             | size(WIDTH, EQUAL, 60);   // ✅ Match Dashboard width constraint
+             | size(HEIGHT, EQUAL, 20)   
+             | size(WIDTH, EQUAL, 60);   
     });
 }
 
-ftxui::Component WatchDetails::GetComponent() { 
-    return component_; 
-}
+ftxui::Component WatchDetails::GetComponent() { return component_; }
 
-void WatchDetails::SetProcess(std::optional<ProcessWatchInfo> info) {
-    current_process_ = std::move(info);
-}
+void WatchDetails::SetProcess(std::optional<ProcessWatchInfo> info) { current_process_ = std::move(info); }
 
-void WatchDetails::Clear() { 
-    current_process_.reset(); 
-}
+void WatchDetails::Clear() {  current_process_.reset(); }

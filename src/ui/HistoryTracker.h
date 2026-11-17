@@ -5,13 +5,13 @@
 #include "ftxui/dom/elements.hpp"
 
 class HistoryTracker {
-public:
-    explicit HistoryTracker(size_t max_points = 60);
+    public:
+        explicit HistoryTracker(size_t max_points = 60);
 
-    void add_sample(uint64_t count);
-    ftxui::Element render(uint64_t max_value) const;
+        void add_sample(uint64_t count);
+        ftxui::Element render(uint64_t max_value) const;
 
-private:
-    std::vector<uint64_t> history_;
-    size_t max_points_;
+    private:
+        std::vector<uint64_t> history_;
+        size_t max_points_;
 };

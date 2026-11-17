@@ -1,7 +1,6 @@
 #pragma once
 #include <vector>
 #include <string>
-#include <cstdint>
 #include <unordered_map>
 #include "ProcScanner.h"
 #include "InotifyParser.h"
@@ -19,6 +18,6 @@ struct ProcessWatchInfo {
 };
 
 class WatchCollector {
-public:
-    static std::vector<ProcessWatchInfo> collect();
+    public:
+        static std::vector<ProcessWatchInfo> collect();
 };

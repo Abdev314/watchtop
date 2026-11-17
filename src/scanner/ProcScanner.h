@@ -8,6 +8,6 @@ struct ProcessInfo {
 };
 
 class ProcScanner {
-public:
-    static std::vector<ProcessInfo> scan();
+    public:
+        static std::vector<ProcessInfo> scan();
 };

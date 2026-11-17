@@ -45,14 +45,14 @@ static std::set<uint64_t> collect_socket_inodes(int pid) {
     return inodes;
 }
 
-// ── Parse /proc/net/tcp[6] into an inode→port map ────────────────────────────
+// Parse /proc/net/tcp[6] into an inode -> port map 
 static std::map<uint64_t, std::string> build_inode_port_map(const std::string& net_path) {
     std::map<uint64_t, std::string> inode_to_port;
     std::ifstream f(net_path);
     if (!f.is_open()) return inode_to_port;
 
     std::string line;
-    std::getline(f, line); // skip header
+    std::getline(f, line); 
 
     while (std::getline(f, line)) {
         if (line.empty()) continue;
@@ -60,7 +60,7 @@ static std::map<uint64_t, std::string> build_inode_port_map(const std::string& n
         std::istringstream iss(line);
         std::string tokens[10];
 
-        // Read exactly 10 tokens — inode is token index 9
+        // Read exactly 10 tokens, inode is token index 9
         bool ok = true;
         for (int i = 0; i < 10; ++i) {
             if (!(iss >> tokens[i])) { ok = false; break; }
@@ -110,7 +110,7 @@ std::vector<ProcessWatchInfo> WatchCollector::collect() {
         if (!fs::exists(fd_dir, ec) || !fs::is_directory(fd_dir, ec))
             continue;
 
-        // ── inotify watches ───────────────────────────────────────────────
+        // inotify watches 
         for (const auto& entry : fs::directory_iterator(fd_dir, ec)) {
             if (ec) break;
             if (!entry.is_symlink()) continue;
@@ -134,7 +134,7 @@ std::vector<ProcessWatchInfo> WatchCollector::collect() {
         if (info.watch_count == 0)
             continue;
 
-        // ── listening ports ───────────────────────────────────────────────
+        // listening ports 
         auto socket_inodes = collect_socket_inodes(proc.pid);
         if (!socket_inodes.empty()) {
             std::set<std::string> seen;

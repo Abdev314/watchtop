@@ -20,7 +20,7 @@ public:
         const int   sel      = parent_->selected_index_;
         const int   total    = static_cast<int>(data.size());
 
-        // ── Compute the visible window ────────────────────────────────────
+        // Compute the visible window
         int half   = kVisibleRows / 2;
         int win_start = sel - half;
         int win_end   = win_start + kVisibleRows;
@@ -34,7 +34,7 @@ public:
             win_start = std::max(0, win_end - kVisibleRows);
         }
 
-        // ── Build table content (header + visible slice) ──────────────────
+        // Build table content (header + visible slice)
         std::vector<std::vector<std::string>> table_content;
         table_content.push_back({"PID", "", "Process", "Watches", "Ports"});
 
@@ -44,7 +44,7 @@ public:
 
             Color row_color = Color::White;
             if (p.is_leaking) {
-                row_color = Color::Yellow;   // or Color::Red for severe
+                row_color = Color::Yellow;  
             }
 
 
@@ -65,7 +65,6 @@ public:
             });
         }
 
-
         auto table = Table(table_content);
         table.SelectAll().Border(LIGHT);
         table.SelectRow(0).Decorate(bold);
@@ -78,14 +77,14 @@ public:
 
 
 
-        // ── Highlight selected row (offset by 1 for header) ───────────────
+        // Highlight selected row (offset by 1 for header) 
         if (sel >= win_start && sel < win_end) {
             int table_row = (sel - win_start) + 1; // +1 for header
             table.SelectRow(table_row)
                  .DecorateCells(bgcolor(Color::Cyan) | color(Color::Black));
         }
 
-        // ─── ADD LEAK HIGHLIGHTING HERE ─────────────────────────────────
+        //  ADD LEAK HIGHLIGHTING HERE 
         // Highlight selected row (priority over leak color)
         if (sel >= win_start && sel < win_end) {
             int table_row = (sel - win_start) + 1;  // +1 for header
@@ -102,11 +101,11 @@ public:
         }
 
         
-        // // ── Scroll indicator: position / total ────────────────────────────
+        // Scroll indicator: position / total 
         std::string scroll_info = std::to_string(sel + 1) + "/" + std::to_string(total);
 
         return vbox({
-            table.Render() | yframe | vscroll_indicator,  // Removed flex
+            table.Render() | yframe | vscroll_indicator,  
             text(" " + scroll_info + " ") | align_right | dim,
         })  
            | size(HEIGHT, EQUAL, 30)   
@@ -132,8 +131,7 @@ private:
     ProcessTable* parent_;
 };
 
-// ── ProcessTable ──────────────────────────────────────────────────────
-
+// ProcessTable 
 ProcessTable::ProcessTable(SelectionCallback on_select)
     : on_select_(std::move(on_select)) {
     table_component_ = Make<ProcessTableComponent>(this);

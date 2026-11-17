@@ -2,12 +2,10 @@
 #include <fstream>
 #include <regex>
 #include <string>
-#include <cctype>
 
 static uint64_t safe_stoull(const std::string& s) {
     if (s.empty()) return 0;
     try {
-        // Handle hex prefix (0x...)
         if (s.size() > 2 && (s[0] == '0' && (s[1] == 'x' || s[1] == 'X'))) {
             return std::stoull(s.substr(2), nullptr, 16);
         }
@@ -44,7 +42,7 @@ std::vector<WatchDescriptor> InotifyParser::parse_fdinfo(const std::string& path
         std::smatch match;
         if (std::regex_search(line, match, inotify_regex) && match.size() == 5) {
             WatchDescriptor wd;
-            wd.wd    = std::stoi(match[1].str());  // wd is always decimal
+            wd.wd    = std::stoi(match[1].str()); 
             wd.inode = safe_stoull(match[2].str());
             wd.sdev  = safe_stoull(match[3].str());
             wd.mask  = safe_stoul(match[4].str());

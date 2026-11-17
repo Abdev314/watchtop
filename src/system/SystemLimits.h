@@ -14,6 +14,6 @@ struct InotifyLimits {
 };
 
 class SystemLimits {
-public:
-    static InotifyLimits read();
+    public:
+        static InotifyLimits read();
 };

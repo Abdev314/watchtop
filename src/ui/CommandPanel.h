@@ -4,21 +4,21 @@
 #include <vector>
 
 class CommandPanel {
-public:
-    CommandPanel();
+    public:
+        CommandPanel();
 
-    ftxui::Component GetComponent();
+        ftxui::Component GetComponent();
 
-    void Focus();
-    void Unfocus();
-    bool Focused() const;
-    void ExecuteCommand(const std::string& cmd);
+        void Focus();
+        void Unfocus();
+        bool Focused() const;
+        void ExecuteCommand(const std::string& cmd);
 
-    std::vector<std::string> output_lines_;
-    std::vector<std::string> command_history_;
-    int                      history_index_ = 0;
-    bool                     focused_       = false;
+        std::vector<std::string> output_lines_;
+        std::vector<std::string> command_history_;
+        int                      history_index_ = 0;
+        bool                     focused_       = false;
 
-private:
-    ftxui::Component container_;
+    private:
+        ftxui::Component container_;
 };
