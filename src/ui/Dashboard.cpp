@@ -12,7 +12,8 @@ using namespace ftxui;
 
 namespace {
 
-constexpr auto kFlashTime = std::chrono::seconds(2);   // how long "Refreshed!" stays visible
+constexpr auto kFlashTime   = std::chrono::seconds(2);   // how long "Refreshed!" stays visible
+constexpr auto kMessageTime = std::chrono::seconds(6);   // how long a kill result stays visible
 
 std::string to_lower(std::string s) {
     std::transform(s.begin(), s.end(), s.begin(),
@@ -47,7 +48,7 @@ std::string num(double v, int decimals) {
     return buf;
 }
 
-} 
+} // namespace
 
 Dashboard::Dashboard(std::function<void()> on_quit, std::function<void()> on_refresh)
     : on_quit_(std::move(on_quit)),
@@ -107,8 +108,9 @@ Dashboard::Dashboard(std::function<void()> on_quit, std::function<void()> on_ref
     dashboard_container_ = Container::Vertical({search_input_, process_table_->GetComponent()});
     FocusTable();
 
-    main_container_ = Renderer(dashboard_container_, [this] {
-        return vbox({
+    // The whole screen. While the kill dialog is open it is drawn on top of the screen.
+    main_container_ = Renderer(dashboard_container_, [this]() -> Element {
+        Element base = vbox({
             text(" WATCHTOP DASHBOARD ") | bold | center | border,
             hbox({
                 system_panel_->Render() | size(WIDTH, EQUAL, 40),
@@ -124,17 +126,34 @@ Dashboard::Dashboard(std::function<void()> on_quit, std::function<void()> on_ref
                 text("") | size(WIDTH, EQUAL, 2) | size(HEIGHT, EQUAL, 30),
                 watch_details_->GetComponent()->Render() | yframe | flex | size(WIDTH, EQUAL, 60),
             }) | size(HEIGHT, EQUAL, 30),
-            text("↑↓: Navigate  ↵: Inspect  Tab: Switch  /: Search  Esc: Back  r: Refresh  q: Quit") | dim | center,
+            FooterHint(),
         }) | size(HEIGHT, EQUAL, Terminal::Size().dimy);
+
+        if (!pending_kill_) return base;
+        return dbox({base, KillDialog() | clear_under | center});
     });
 
-    // Keyboard shortcuts. While the search box is active, letters go to the box,
-    // so "q", "r" and "/" can be typed normally.
+    // Keyboard shortcuts.
     main_container_ |= CatchEvent([this](Event event) {
+        // 1. Dialog open: it owns the keyboard. Every other key is ignored on purpose,
+        //    so nothing can trigger by accident while a kill is being confirmed.
+        if (pending_kill_) {
+            if (event == Event::Custom) return false;   // let the redraw event through
+            if (event == Event::Return || event == Event::Character('y'))
+                ConfirmKill(KillSignal::Terminate);
+            else if (event == Event::Character('f'))
+                ConfirmKill(KillSignal::Kill);
+            else if (event == Event::Escape || event == Event::Character('n'))
+                pending_kill_.reset();
+            return true;
+        }
+
         if (event == Event::Tab) {
             SearchFocused() ? FocusTable() : FocusSearch();
             return true;
         }
+
+        // 2. Search box active: letters go to the box, so "q", "r", "k" and "/" can be typed.
         if (SearchFocused()) {
             if (event == Event::Escape || event == Event::Return) {
                 FocusTable();
@@ -142,7 +161,10 @@ Dashboard::Dashboard(std::function<void()> on_quit, std::function<void()> on_ref
             }
             return false;
         }
+
+        // 3. Normal shortcuts (table focused).
         if (event == Event::Character('q')) { on_quit_(); return true; }
+        if (event == Event::Character('k')) { AskToKill(); return true; }
         if (event == Event::Character('r')) {
             manual_refresh_pending_ = true;   // shows "Refreshing..." until new data arrives
             on_refresh_();
@@ -169,6 +191,60 @@ void Dashboard::FocusTable() {
     process_table_->GetComponent()->TakeFocus();
 }
 
+// Shows a message in the footer for a few seconds (green = done, red = problem).
+void Dashboard::SetMessage(std::string text, bool is_error) {
+    action_message_  = std::move(text);
+    action_is_error_ = is_error;
+    action_until_    = std::chrono::steady_clock::now() + kMessageTime;
+}
+
+// "k": copies the highlighted process into pending_kill_, which opens the dialog.
+// Nothing is sent yet. Refuses early (with a message) when the process cannot be signaled.
+void Dashboard::AskToKill() {
+    const auto pid = process_table_->SelectedPid();
+    if (!pid) {
+        SetMessage("Select a process first (use the arrow keys).", true);
+        return;
+    }
+
+    const auto it = std::find_if(visible_.begin(), visible_.end(),
+                                 [&](const ProcessWatchInfo* p) { return p->pid == *pid; });
+    if (it == visible_.end()) return;
+    const ProcessWatchInfo& proc = **it;
+
+    if (const auto why = ProcessControl::check_allowed(proc.pid); !why.empty()) {
+        SetMessage(why, true);
+        return;
+    }
+
+    std::string ports;
+    for (const auto& port : proc.listening_ports)
+        ports += (ports.empty() ? "" : ", ") + port;
+    if (ports.empty()) ports = "-";
+
+    pending_kill_ = PendingKill{proc.pid, proc.name, ports, proc.watch_count, proc.start_ticks};
+}
+
+// Sends the chosen signal to the process shown in the dialog and reports the result.
+void Dashboard::ConfirmKill(KillSignal signal) {
+    if (!pending_kill_) return;
+    const PendingKill target = *pending_kill_;
+    pending_kill_.reset();
+
+    const bool force = (signal == KillSignal::Kill);
+    const std::string who = target.name + " (" + std::to_string(target.pid) + ")";
+
+    const std::string error = ProcessControl::send(target.pid, target.start_ticks, signal);
+    if (!error.empty()) {
+        SetMessage("Not stopped: " + error, true);
+        return;
+    }
+
+    SetMessage(force ? "SIGKILL sent to " + who + "."
+                     : "SIGTERM sent to " + who + ". Still listed? Press k, then f to force.",
+               false);
+}
+
 // One fixed line (so the layout never jumps) that tells the user what the refresh is doing:
 //   yellow = manual refresh requested, green = manual refresh done, dim = normal auto-refresh.
 Element Dashboard::RefreshStatus() const {
@@ -177,6 +253,34 @@ Element Dashboard::RefreshStatus() const {
     if (std::chrono::steady_clock::now() < manual_flash_until_)
         return text(" ✔ Refreshed! ") | bold | color(Color::Black) | bgcolor(Color::Green);
     return text("Auto-refresh: every 1s") | dim;
+}
+
+// Bottom line: the result of the last kill for a few seconds, otherwise the key help.
+Element Dashboard::FooterHint() const {
+    if (!action_message_.empty() && std::chrono::steady_clock::now() < action_until_)
+        return text(" " + action_message_ + " ") | bold |
+               color(action_is_error_ ? Color::Red : Color::Green) | center;
+
+    return text("↑↓: Navigate  ↵: Inspect  k: Kill  Tab: Switch  /: Search  Esc: Back  r: Refresh  q: Quit")
+           | dim | center;
+}
+
+// The confirmation box. It shows what will be stopped and what each key does.
+Element Dashboard::KillDialog() const {
+    const PendingKill& k = *pending_kill_;
+    return vbox({
+               text(" Stop this process? ") | bold | color(Color::Red) | center,
+               separator(),
+               text("Name:     " + k.name),
+               text("PID:      " + std::to_string(k.pid)),
+               text("Ports:    " + k.ports),
+               text("Watches:  " + std::to_string(k.watches)),
+               separator(),
+               text("Enter / y   Terminate (SIGTERM, lets it clean up)"),
+               text("f           Force kill (SIGKILL, no cleanup)"),
+               text("Esc / n     Cancel") | dim,
+           })
+           | borderDouble | size(WIDTH, GREATER_THAN, 52);
 }
 
 // Top 3 processes by watch count (with their share of the total) and a leak summary.
