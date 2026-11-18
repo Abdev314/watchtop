@@ -1,17 +1,20 @@
 #pragma once
-#include <unordered_map>
-#include <deque>
 #include <chrono>
-#include "WatchCollector.h"   
+#include <deque>
+#include <unordered_map>
+#include <vector>
+#include "WatchCollector.h"
 
 struct LeakInfo {
-    bool is_leaking = false;
-    double leak_rate = 0.0;
-    int current_count = 0;
+    bool   is_leaking   = false;
+    double leak_rate    = 0.0;   // watches gained per second
+    int    current_count = 0;
 };
 
+// Flags processes whose watch count keeps growing steadily.
 class LeakDetector {
     public:
+        // Call once per refresh with ALL processes (never a filtered list).
         std::unordered_map<int, LeakInfo> update(const std::vector<ProcessWatchInfo>& processes);
 
     private:
@@ -20,8 +23,8 @@ class LeakDetector {
             int watch_count;
         };
         std::unordered_map<int, std::deque<HistoryEntry>> history_;
-        
-        static constexpr int MAX_HISTORY = 10;
-        static constexpr double LEAK_THRESHOLD = 1.0;
-        static constexpr int MIN_SAMPLES = 3;
+
+        static constexpr size_t MAX_HISTORY    = 30;    // samples kept per process
+        static constexpr size_t MIN_SAMPLES    = 10;    // samples needed before judging
+        static constexpr double LEAK_THRESHOLD = 2.0;   // watches per second
 };
