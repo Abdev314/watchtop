@@ -1,16 +1,18 @@
 #pragma once
-#include <optional>
 #include "ftxui/component/component.hpp"
 #include "../scanner/WatchCollector.h"
 
+// Right panel: watch list of the selected process.
 class WatchDetails {
     public:
-        WatchDetails();  
+        WatchDetails();
         ftxui::Component GetComponent();
-        void SetProcess(std::optional<ProcessWatchInfo> info);
+
+        // `info` points into the Dashboard's data and must stay valid until the next call.
+        void SetProcess(const ProcessWatchInfo* info);
         void Clear();
 
     private:
-        std::optional<ProcessWatchInfo> current_process_;
+        const ProcessWatchInfo* current_ = nullptr;
         ftxui::Component component_;
 };
