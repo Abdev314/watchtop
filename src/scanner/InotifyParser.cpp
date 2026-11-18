@@ -1,58 +1,55 @@
 #include "InotifyParser.h"
+
+#include <cstdlib>
 #include <fstream>
-#include <string>
 #include <string_view>
 
-std::vector<WatchDescriptor>
-InotifyParser::parse_fdinfo(const std::string& path) {
+namespace {
+
+// Reads a hexadecimal number that follows `field` (e.g. " ino:") and moves `p` past it.
+// An empty `field` just reads a number at the current position.
+bool read_hex(const char*& p, std::string_view field, uint64_t& out) {
+    if (!std::string_view(p).starts_with(field)) return false;
+    p += field.size();
+
+    char* end = nullptr;
+    out = std::strtoull(p, &end, 16);
+    if (end == p) return false;
+
+    p = end;
+    return true;
+}
+
+} // namespace
+
+// Parses lines such as:  inotify wd:1f ino:3a2b sdev:803 mask:fc6 ...
+// The kernel prints ALL these numbers in hexadecimal.
+std::vector<WatchDescriptor> InotifyParser::parse_fdinfo(const std::string& path) {
     std::vector<WatchDescriptor> watches;
 
     std::ifstream file(path);
-    if (!file.is_open()) return watches;
+    if (!file.is_open()) return watches;   // process exited or access denied
 
+    constexpr std::string_view prefix = "inotify wd:";
     std::string line;
 
     while (std::getline(file, line)) {
-        constexpr std::string_view prefix = "inotify wd:";
-
-        if (!line.starts_with(prefix))
-            continue;
+        if (!line.starts_with(prefix)) continue;
 
         const char* p = line.c_str() + prefix.size();
-        char* end = nullptr;
+        uint64_t wd = 0, ino = 0, sdev = 0, mask = 0;
 
-        WatchDescriptor wd{};
+        if (!read_hex(p, "", wd)) continue;   // a line without a watch id is not a watch
+        read_hex(p, " ino:",  ino);
+        read_hex(p, " sdev:", sdev);
+        read_hex(p, " mask:", mask);
 
-        wd.wd = static_cast<int>(std::strtoul(p, &end, 10));
-        if (end == p)
-            continue;
-        p = end;
-
-        auto consume = [&](std::string_view field) -> bool {
-            if (!std::string_view(p).starts_with(field))
-                return false;
-
-            p += field.size();
-            return true;
-        };
-
-        if (consume(" ino:")) {
-            wd.inode = std::strtoull(p, &end, 0);
-            p = end;
-        }
-
-        if (consume(" sdev:")) {
-            wd.sdev = std::strtoull(p, &end, 0);
-            p = end;
-        }
-
-        if (consume(" mask:")) {
-            wd.mask = static_cast<uint32_t>(std::strtoul(p, &end, 0));
-            p = end;
-        }
-
-        watches.push_back(wd);
+        WatchDescriptor w;
+        w.wd    = static_cast<int>(wd);
+        w.inode = ino;
+        w.sdev  = sdev;
+        w.mask  = static_cast<uint32_t>(mask);
+        watches.push_back(w);
     }
-
     return watches;
 }
