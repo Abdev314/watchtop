@@ -9,6 +9,7 @@
 #include <string_view>
 #include <unistd.h>
 #include <unordered_map>
+#include "system/ProcessControl.h"
 
 namespace fs = std::filesystem;
 
@@ -114,6 +115,7 @@ std::vector<ProcessWatchInfo> WatchCollector::collect() {
 
         info.watch_count = info.watches.size();
         if (info.watch_count == 0) continue;     // not an inotify user, skip
+        info.start_ticks = ProcessControl::start_ticks(proc.pid);
 
         // Match this process's sockets against the listening-port tables.
         std::set<int> ports;

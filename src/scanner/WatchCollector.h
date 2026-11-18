@@ -13,6 +13,7 @@ struct ProcessWatchInfo {
     std::vector<std::string>     listening_ports;
     bool        is_leaking = false;
     double      leak_rate  = 0.0;
+    uint64_t    start_ticks = 0;   // process start time, used to identify it safely when stopping it
 };
 
 class WatchCollector {

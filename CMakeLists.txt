@@ -36,6 +36,7 @@ add_executable(watchtop
   src/ui/ProcessTable.cpp
   src/ui/WatchDetails.cpp
   src/ui/HistoryTracker.cpp
+  src/system/ProcessControl.cpp
 )
 
 target_include_directories(watchtop PRIVATE src)
