@@ -1,32 +1,83 @@
 #include "Dashboard.h"
-#include "ftxui/dom/elements.hpp"
 #include "ftxui/component/component.hpp"
+#include "ftxui/component/event.hpp"
+#include "ftxui/dom/elements.hpp"
 #include <algorithm>
-#include <chrono>  
-#include <ctime>    
-#include <iostream> 
-#include <fstream>
-#include "HistoryTracker.h"
+#include <cctype>
+#include <cstdio>
+#include <ctime>
+#include <unistd.h>
+
 using namespace ftxui;
 
-Dashboard::Dashboard(): history_tracker_(60) {
-    watch_details_ = std::make_unique<WatchDetails>();
-    command_panel_ = std::make_unique<CommandPanel>();
-    search_input_  = Input(&search_filter_, "Search by PID, name or port...");
+namespace {
 
+constexpr auto kFlashTime = std::chrono::seconds(2);   // how long "Refreshed!" stays visible
+
+std::string to_lower(std::string s) {
+    std::transform(s.begin(), s.end(), s.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    return s;
+}
+
+// True if the (already lower-case) filter appears in the PID, name or any port.
+bool matches(const ProcessWatchInfo& p, const std::string& filter) {
+    if (filter.empty()) return true;
+    if (std::to_string(p.pid).find(filter) != std::string::npos) return true;
+    if (to_lower(p.name).find(filter) != std::string::npos) return true;
+    for (const auto& port : p.listening_ports)
+        if (port.find(filter) != std::string::npos) return true;
+    return false;
+}
+
+// Thread-safe local time, e.g. "14:05:09".
+std::string now_string() {
+    std::time_t t = std::time(nullptr);
+    std::tm tm{};
+    localtime_r(&t, &tm);
+    char buf[16];
+    std::strftime(buf, sizeof(buf), "%H:%M:%S", &tm);
+    return buf;
+}
+
+// Number to text with a fixed count of decimals.
+std::string num(double v, int decimals) {
+    char buf[48];
+    std::snprintf(buf, sizeof(buf), "%.*f", decimals, v);
+    return buf;
+}
+
+} 
+
+Dashboard::Dashboard(std::function<void()> on_quit, std::function<void()> on_refresh)
+    : on_quit_(std::move(on_quit)),
+      on_refresh_(std::move(on_refresh)),
+      is_root_(geteuid() == 0) {
+
+    watch_details_ = std::make_unique<WatchDetails>();
+
+    // Search box: the table is filtered on every keystroke.
+    InputOption search_opt;
+    search_opt.on_change = [this] { ApplyFilter(); };
+    search_input_ = Input(&search_filter_, "Search by PID, name or port...", search_opt);
+
+    // Pressing Enter on a row shows its watches in the right panel.
     process_table_ = std::make_unique<ProcessTable>(
         [this](const ProcessWatchInfo& info) {
             selected_pid_ = info.pid;
-            watch_details_->SetProcess(info);
+            watch_details_->SetProcess(&info);
         });
 
-    system_panel_ = Renderer([&] {
-        double usage = limits_.usage_percent();
-        std::string bar;
-        int filled = static_cast<int>(usage / 10.0);
-        for (int i = 0; i < 10; ++i)
-            bar += (i < filled) ? '#' : ' ';
-        std::string usage_bar = "[" + bar + "]";
+    // Top-left box: limits, usage (number + gauge) and refresh status.
+    system_panel_ = Renderer([this] {
+        const bool   limit_known = limits_.max_user_watches > 0;
+        const double usage       = limits_.usage_percent();
+        const Color  usage_color = usage > 80 ? Color::Red : (usage > 60 ? Color::Yellow : Color::Green);
+
+        // Small percentages need decimals, otherwise 0.09% is shown as "0%".
+        const std::string usage_text =
+            !limit_known ? "unknown (limit unreadable)"
+                         : num(usage, usage < 10 ? 2 : 1) + "%";
 
         Elements rows;
         rows.push_back(text("System Watch Status") | bold);
@@ -35,168 +86,199 @@ Dashboard::Dashboard(): history_tracker_(60) {
         rows.push_back(hbox({text("Max User Instances:"), text(std::to_string(limits_.max_user_instances)) | dim}));
         rows.push_back(hbox({text("Max Queued Events: "), text(std::to_string(limits_.max_queued_events)) | dim}));
         rows.push_back(separator());
-        rows.push_back(hbox({text("Active Watches:    "), text(std::to_string(limits_.current_watches)) | color(usage > 80 ? Color::Red : Color::White)}));
-        rows.push_back(hbox({text("Usage:             "), text(std::to_string(static_cast<int>(usage)) + "% " + usage_bar) |
-                                                       color(usage > 80 ? Color::Red : Color::White)}));
+        rows.push_back(hbox({text("Active Watches:    "),
+                             text(std::to_string(limits_.current_watches)) | color(usage_color)}));
+        rows.push_back(hbox({text("Usage:             "), text(usage_text) | color(usage_color) | bold}));
+        rows.push_back(hbox({text("["),
+                             gauge(static_cast<float>(std::min(usage, 100.0) / 100.0)) | color(usage_color) | flex,
+                             text("]")}));
         if (usage > 80)
             rows.push_back(text("WARNING: Watch usage above 80%") | color(Color::Red) | bold);
 
         rows.push_back(separator());
-        auto now = std::chrono::system_clock::now();
-        std::time_t now_c = std::chrono::system_clock::to_time_t(now);
-        std::string time_str = std::ctime(&now_c);
-        if (!time_str.empty() && time_str.back() == '\n')
-            time_str.pop_back();
-        rows.push_back(text("Last refresh: " + time_str) | dim);
-
+        rows.push_back(text(is_root_ ? "Mode: root (all users counted)"
+                                     : "Mode: user (own processes only)") | dim);
+        rows.push_back(text("Last update: " + last_refresh_ + "  (#" + std::to_string(refresh_count_) + ")") | dim);
+        rows.push_back(RefreshStatus());
         return vbox(std::move(rows)) | border;
     });
 
-    dashboard_container_ = Container::Vertical({
-        search_input_,
-        process_table_->GetComponent(),
-        watch_details_->GetComponent(),
-        command_panel_->GetComponent()
-    });
+    // Only the search box and the table take keyboard focus.
+    dashboard_container_ = Container::Vertical({search_input_, process_table_->GetComponent()});
+    FocusTable();
 
-    dashboard_container_->SetActiveChild(process_table_->GetComponent());
-
-    main_container_ = Renderer(dashboard_container_, [&] {
+    main_container_ = Renderer(dashboard_container_, [this] {
         return vbox({
             text(" WATCHTOP DASHBOARD ") | bold | center | border,
             hbox({
-                system_panel_->Render() | size(WIDTH, EQUAL, 40), 
-                history_tracker_.render(limits_.max_user_watches) | border |  flex,
+                system_panel_->Render() | size(WIDTH, EQUAL, 40),
+                vbox({
+                    history_tracker_.render(limits_.max_user_watches),
+                    separator(),
+                    TopConsumers(),
+                }) | border | flex,
             }) | flex,
+            hbox({text(" 🔍 "), search_input_->Render() | flex}) | border,
             hbox({
-                text(" 🔍 "),
-                search_input_->Render() | flex
-            }) | border,
-            // Inside the main vbox in Dashboard constructor
-
-            hbox({
-                process_table_->GetComponent()->Render() | yframe | flex | size(WIDTH, EQUAL, 60),  // Fixed width
-                    text("") | size(WIDTH, EQUAL, 2) | size(HEIGHT, EQUAL, 30),
-
-                watch_details_->GetComponent()->Render() | yframe | flex | size(WIDTH, EQUAL, 60),  // Same width
+                process_table_->GetComponent()->Render() | yframe | flex | size(WIDTH, EQUAL, 60),
+                text("") | size(WIDTH, EQUAL, 2) | size(HEIGHT, EQUAL, 30),
+                watch_details_->GetComponent()->Render() | yframe | flex | size(WIDTH, EQUAL, 60),
             }) | size(HEIGHT, EQUAL, 30),
-
-            command_panel_->GetComponent()->Render() | size(HEIGHT, EQUAL, 8),
-            text("↑↓: Navigate  ↵: Inspect  Tab: Switch Focus  /: Search  r: Refresh  q: Quit") | dim | center
+            text("↑↓: Navigate  ↵: Inspect  Tab: Switch  /: Search  Esc: Back  r: Refresh  q: Quit") | dim | center,
         }) | size(HEIGHT, EQUAL, Terminal::Size().dimy);
     });
 
-    main_container_ |= CatchEvent([&](Event event) {
+    // Keyboard shortcuts. While the search box is active, letters go to the box,
+    // so "q", "r" and "/" can be typed normally.
+    main_container_ |= CatchEvent([this](Event event) {
         if (event == Event::Tab) {
-            auto active = dashboard_container_->ActiveChild();
-            if (active == search_input_) {
-                command_panel_->Unfocus();
-                dashboard_container_->SetActiveChild(process_table_->GetComponent());
-                process_table_->GetComponent()->TakeFocus();
-            } else if (active == process_table_->GetComponent()) {
-                command_panel_->Unfocus();
-                dashboard_container_->SetActiveChild(command_panel_->GetComponent());
-                command_panel_->Focus();
-            } else {
-                // leaving command panel → go to search
-                command_panel_->Unfocus();
-                dashboard_container_->SetActiveChild(search_input_);
-                search_input_->TakeFocus();
+            SearchFocused() ? FocusTable() : FocusSearch();
+            return true;
+        }
+        if (SearchFocused()) {
+            if (event == Event::Escape || event == Event::Return) {
+                FocusTable();
+                return true;
             }
+            return false;
+        }
+        if (event == Event::Character('q')) { on_quit_(); return true; }
+        if (event == Event::Character('r')) {
+            manual_refresh_pending_ = true;   // shows "Refreshing..." until new data arrives
+            on_refresh_();
             return true;
         }
-        if (event == Event::Character('/')) {
-            command_panel_->Unfocus();
-            dashboard_container_->SetActiveChild(search_input_);
-            search_input_->TakeFocus();
-            return true;
-        }
+        if (event == Event::Character('/')) { FocusSearch(); return true; }
         return false;
     });
-
-    RefreshData();
 }
 
 ftxui::Component Dashboard::GetComponent() { return main_container_; }
 
-void Dashboard::RefreshData() {
-    limits_      = SystemLimits::read();
-    auto allProcesses = WatchCollector::collect();
-    
-    std::string lowerFilter = search_filter_;
-    std::transform(lowerFilter.begin(), lowerFilter.end(),
-                   lowerFilter.begin(), ::tolower);
+bool Dashboard::SearchFocused() const {
+    return dashboard_container_->ActiveChild() == search_input_;
+}
 
-    std::vector<ProcessWatchInfo> filtered;
-    for (const auto& p : allProcesses) {
-        if (lowerFilter.empty()) {
-            filtered.push_back(p);
-            continue;
-        }
+void Dashboard::FocusSearch() {
+    dashboard_container_->SetActiveChild(search_input_);
+    search_input_->TakeFocus();
+}
 
-        if (std::to_string(p.pid).find(lowerFilter) != std::string::npos) {
-            filtered.push_back(p);
-            continue;
-        }
+void Dashboard::FocusTable() {
+    dashboard_container_->SetActiveChild(process_table_->GetComponent());
+    process_table_->GetComponent()->TakeFocus();
+}
 
-        // Match process name
-        std::string lowerName = p.name;
-        std::transform(lowerName.begin(), lowerName.end(),
-                       lowerName.begin(), ::tolower);
-        if (lowerName.find(lowerFilter) != std::string::npos) {
-            filtered.push_back(p);
-            continue;
-        }
+// One fixed line (so the layout never jumps) that tells the user what the refresh is doing:
+//   yellow = manual refresh requested, green = manual refresh done, dim = normal auto-refresh.
+Element Dashboard::RefreshStatus() const {
+    if (manual_refresh_pending_)
+        return text(" ⟳ Refreshing... ") | bold | color(Color::Black) | bgcolor(Color::Yellow);
+    if (std::chrono::steady_clock::now() < manual_flash_until_)
+        return text(" ✔ Refreshed! ") | bold | color(Color::Black) | bgcolor(Color::Green);
+    return text("Auto-refresh: every 1s") | dim;
+}
 
-        bool portMatch = false;
-        for (const auto& port : p.listening_ports) {
-            std::string lowerPort = port;
-            std::transform(lowerPort.begin(), lowerPort.end(),
-                           lowerPort.begin(), ::tolower);
-            if (lowerPort.find(lowerFilter) != std::string::npos) {
-                portMatch = true;
-                break;
-            }
-        }
-        if (portMatch) {
-            filtered.push_back(p);
-            continue;
-        }
+// Top 3 processes by watch count (with their share of the total) and a leak summary.
+Element Dashboard::TopConsumers() const {
+    Elements rows;
+    rows.push_back(text("Top consumers") | bold);
+
+    if (top_.empty())
+        rows.push_back(text("  none") | dim);
+
+    for (size_t i = 0; i < top_.size(); ++i) {
+        const auto& t = top_[i];
+        const double share = limits_.current_watches > 0
+            ? 100.0 * static_cast<double>(t.count) / static_cast<double>(limits_.current_watches)
+            : 0.0;
+        rows.push_back(hbox({
+            text(" " + std::to_string(i + 1) + ". "),
+            text(t.name + " (" + std::to_string(t.pid) + ")") | size(WIDTH, EQUAL, 30),
+            text(std::to_string(t.count)) | align_right | size(WIDTH, EQUAL, 8),
+            text(num(share, 1) + "%") | dim | align_right | size(WIDTH, EQUAL, 8),
+        }));
     }
 
-    auto leakStatus = leak_detector_.update(filtered);
-    bool any_leaking = false;                   
-    for (auto& p : filtered) {
-        auto it = leakStatus.find(p.pid);
-        if (it != leakStatus.end()) {
-            p.is_leaking = it->second.is_leaking;
-            p.leak_rate = it->second.leak_rate;
+    if (leaking_.empty())
+        rows.push_back(text("Leak check: no leaks detected") | color(Color::Green));
+    else
+        rows.push_back(text("Possible leak: " + leaking_) | color(Color::Yellow) | bold);
 
-        }
-    }
-    processes_ = std::move(filtered);
+    return vbox(std::move(rows));
+}
 
+// Stores new data. Totals, history and leak detection use ALL processes,
+// so typing in the search box never changes them.
+void Dashboard::ApplyData(const InotifyLimits& limits, std::vector<ProcessWatchInfo> data) {
+    limits_ = limits;
+
+    const auto leaks = leak_detector_.update(data);
     uint64_t total = 0;
-    for (const auto& p : processes_)
+    for (auto& p : data) {
         total += p.watch_count;
+        if (auto it = leaks.find(p.pid); it != leaks.end()) {
+            p.is_leaking = it->second.is_leaking;
+            p.leak_rate  = it->second.leak_rate;
+        }
+    }
     limits_.current_watches = total;
+    history_tracker_.add_sample(total);
 
-     history_tracker_.add_sample(total);
+    all_processes_ = std::move(data);
 
-    process_table_->UpdateData(processes_);
+    // Top 3 consumers.
+    std::vector<const ProcessWatchInfo*> ranked;
+    for (const auto& p : all_processes_) ranked.push_back(&p);
+    const size_t n = std::min<size_t>(3, ranked.size());
+    std::partial_sort(ranked.begin(), ranked.begin() + static_cast<std::ptrdiff_t>(n), ranked.end(),
+                      [](const ProcessWatchInfo* a, const ProcessWatchInfo* b) {
+                          return a->watch_count > b->watch_count;
+                      });
+    top_.clear();
+    for (size_t i = 0; i < n; ++i)
+        top_.push_back({ranked[i]->pid, ranked[i]->name, ranked[i]->watch_count});
 
-    if (!selected_pid_.has_value()) {
-        watch_details_->Clear();
-        return;
+    // Leaking processes as "name (pid)": first 3, then "+N more".
+    leaking_.clear();
+    size_t leak_count = 0;
+    for (const auto& p : all_processes_) {
+        if (!p.is_leaking) continue;
+        if (leak_count < 3)
+            leaking_ += (leak_count ? ", " : "") + p.name + " (" + std::to_string(p.pid) + ")";
+        ++leak_count;
+    }
+    if (leak_count > 3) leaking_ += " +" + std::to_string(leak_count - 3) + " more";
+
+    // Refresh feedback: remember when data arrived; confirm a manual refresh for 2 seconds.
+    last_refresh_ = now_string();
+    ++refresh_count_;
+    if (manual_refresh_pending_) {
+        manual_refresh_pending_ = false;
+        manual_flash_until_ = std::chrono::steady_clock::now() + kFlashTime;
     }
 
-    auto it = std::find_if(processes_.begin(), processes_.end(),
-        [&](const ProcessWatchInfo& p) { return p.pid == *selected_pid_; });
+    ApplyFilter();
+}
 
-    if (it == processes_.end()) {
-        selected_pid_.reset();
-        watch_details_->Clear();
-    } else {
+// Rebuilds the visible list from the search text and refreshes the right panel.
+// Must run after all_processes_ changes, because the other panels point into it.
+void Dashboard::ApplyFilter() {
+    const std::string filter = to_lower(search_filter_);
+
+    visible_.clear();
+    for (const auto& p : all_processes_)
+        if (matches(p, filter)) visible_.push_back(&p);
+
+    process_table_->UpdateData(visible_);
+
+    watch_details_->Clear();
+    if (!selected_pid_) return;
+
+    auto it = std::find_if(visible_.begin(), visible_.end(),
+                           [&](const ProcessWatchInfo* p) { return p->pid == *selected_pid_; });
+    if (it == visible_.end())
+        selected_pid_.reset();                 // process exited or is filtered out
+    else
         watch_details_->SetProcess(*it);
-    }
 }
