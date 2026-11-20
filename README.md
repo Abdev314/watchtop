@@ -1,4 +1,3 @@
-# watchtop
 <p align="center">
   <img src="assets/logo-animated.svg" width="140" alt="watchtop logo">
 </p>
@@ -6,8 +5,8 @@
 <h1 align="center">watchtop</h1>
 
 <p align="center">
-  <b>See which processes are using your inotify file watchers.</b><br>
-  Find the cause of "System limit for number of file watchers reached" in seconds.
+  <b>Who is using up your file watchers?</b><br>
+  Find out in seconds, and fix <i>"System limit for number of file watchers reached"</i>.
 </p>
 
 <p align="center">
@@ -17,17 +16,12 @@
   <img src="https://img.shields.io/badge/status-v0.1.0%20early-orange" alt="Status: early release">
 </p>
 
+**watchtop** is a Linux terminal tool that shows which programs are using up your file watchers.
 
-**watchtop** is a terminal tool for Linux that shows **which processes are using your inotify file watchers**, so you can find the cause of the *"System limit for number of file watchers reached"* error in seconds.
+Your editor, your dev server and your sync apps all ask Linux to tell them when a file changes. Each request is called a **watch**, and Linux only allows so many of them. When the limit is reached, apps crash or stop reloading, and the error does not say who is responsible.
 
-![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)
-![Platform: Linux](https://img.shields.io/badge/platform-Linux-lightgrey)
-![Language: C++20](https://img.shields.io/badge/C%2B%2B-20-blue)
-![Status: early release](https://img.shields.io/badge/status-v0.1.0%20early-orange)
+watchtop shows you **who** is using the watches, **whether the number keeps growing**, and lets you **stop the culprit safely**, all in one live dashboard.
 
-<!-- IMAGE 1 (hero): Full dashboard screenshot (assets/v1.2.png or a new one).
-     It should show the system panel, the history graph, the top consumers list,
-     and the process table with one selected row. -->
 ![watchtop dashboard](assets/dashboard.png)
 
 ---
@@ -96,9 +90,7 @@ It is **not** a file-event monitor like `inotifywait`. It does not watch your fi
 - **Refresh indicator**: a clear sign when you press `r`
 - **Low CPU use**: only inotify descriptors are parsed, with no regular expressions
 
-<!-- IMAGE 2: Close-up of the top area. Show the history graph rising, the line
-     "▲ Growing +N in 1m", the "Limit reached in ~X" forecast, and the top consumers
-     with a yellow "Possible leak: name (pid)" line. -->
+
 ![History and leak detection](assets/history-leak.png)
 
 ---
@@ -153,9 +145,7 @@ Start it from a terminal. A window of at least **120 columns by 45 rows** is rec
 3. Press `Enter` to ask it to stop politely.
 4. If it is still listed, press `k`, then `f` to force it.
 
-<!-- IMAGE 3: Search by port. Screenshot with "3000" typed in the search box and
-     the table filtered to one process, with the port visible in the Ports column.
-     (You can reuse assets/Search_by_port.png.) -->
+
 ![Search by port](assets/Search_by_port.png)
 
 ### Example: "which app is using all my watches?"
