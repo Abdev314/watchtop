@@ -1,4 +1,22 @@
 # watchtop
+<p align="center">
+  <img src="assets/logo-animated.svg" width="140" alt="watchtop logo">
+</p>
+
+<h1 align="center">watchtop</h1>
+
+<p align="center">
+  <b>See which processes are using your inotify file watchers.</b><br>
+  Find the cause of "System limit for number of file watchers reached" in seconds.
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT">
+  <img src="https://img.shields.io/badge/platform-Linux-lightgrey" alt="Platform: Linux">
+  <img src="https://img.shields.io/badge/C%2B%2B-20-blue" alt="Language: C++20">
+  <img src="https://img.shields.io/badge/status-v0.1.0%20early-orange" alt="Status: early release">
+</p>
+
 
 **watchtop** is a terminal tool for Linux that shows **which processes are using your inotify file watchers**, so you can find the cause of the *"System limit for number of file watchers reached"* error in seconds.
 
