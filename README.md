@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/logo-animated.svg" width="140" alt="watchtop logo">
+  <img src="assets/logo-animated.svg" width="180" alt="watchtop logo">
 </p>
 
 <h1 align="center">watchtop</h1>
