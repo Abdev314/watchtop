@@ -37,7 +37,6 @@ watchtop shows you **who** is using the watches, **whether the number keeps grow
 - [Security and safety](#security-and-safety)
 - [Tests](#tests)
 - [Known limitations](#known-limitations)
-- [Roadmap](#roadmap)
 - [Contributing](#contributing)
 - [License](#license)
 
@@ -275,10 +274,7 @@ Each test ends as **PASS**, **FAIL**, **ERROR** (the test itself crashed) or **S
 Useful options: `--list`, `--only kill,count`, `--skip perf`, `--long 1800` (a 30 minute CPU and memory run), and `--bin build-asan/watchtop --label asan` (run the same tests against another build).
 
 **Still to verify** (this list will shrink as the tests are run):
-- [ ] Run as root
 - [ ] AddressSanitizer, UBSan and ThreadSanitizer builds
-- [ ] A 30 minute run
-- [ ] Another user's process (needs passwordless `sudo`)
 - [ ] Ubuntu, Fedora and Arch
 - [ ] Docker and other containers
 
@@ -298,27 +294,6 @@ Useful options: `--list`, `--only kill,count`, `--skip perf`, `--long 1800` (a 3
 
 ---
 
-## Roadmap
-
-**Next (v0.2):**
-- A hint on how to raise the limit (`sudo sysctl fs.inotify.max_user_watches=524288`)
-- Sorting the table by watches, PID or name
-- A banner when running without root ("showing your processes only")
-- `CHANGELOG.md` and pre-built binaries
-- GitHub Actions to run the tests on every push
-
-**Then:**
-- Test on Ubuntu, Fedora, Arch and other distributions
-- Container support: Docker and Podman (host `/proc` with `--pid=host`, and per-container attribution)
-- Show the real watched paths where possible
-- Per-user usage view when running as root
-- UDP ports, and optional kill of a whole process group (with confirmation)
-- JSON output
-- Lower CPU by remembering which file descriptors are inotify (new watchers must still appear quickly)
-
-Ideas are welcome, please open an issue.
-
----
 
 ## Contributing
 
@@ -328,15 +303,13 @@ Contributions are welcome. Please open an issue to discuss a change before sendi
 2. Create a feature branch
 3. Build with `-Wall -Wextra` and make sure there are no warnings
 4. Run `python3 tests/run_tests.py` and make sure nothing fails
-5. Commit with a clear message (for example `fix(scanner): ...`)
-6. Open a pull request
+5. Open a pull request
 
 ---
 
 ## License
 
-Distributed under the **MIT License**. See the `LICENSE` file for details.
-
+Distributed under the [MIT License](LICENSE). See the `LICENSE` file for details.
 ---
 
-<p align="center">Made for Linux developers.</p>
+<p align="center">Made for Linux developers</p>
