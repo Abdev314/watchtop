@@ -13,7 +13,7 @@
   <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT">
   <img src="https://img.shields.io/badge/platform-Linux-lightgrey" alt="Platform: Linux">
   <img src="https://img.shields.io/badge/C%2B%2B-20-blue" alt="Language: C++20">
-  <img src="https://img.shields.io/badge/status-v0.1.0%20early-orange" alt="Status: early release">
+  <img src="https://img.shields.io/badge/status-v1.0.0%20early-orange" alt="Status: early release">
 </p>
 
 **watchtop** is a Linux terminal tool that shows which programs are using up your file watchers.
