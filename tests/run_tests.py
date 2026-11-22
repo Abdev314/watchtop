@@ -33,24 +33,26 @@ import termios
 import time
 import traceback
 from pathlib import Path
+from typing import Callable, Optional
 
 ROOT = Path(__file__).resolve().parent.parent
 RESULTS = ROOT / "tests" / "results"
 SANITIZER_LOGS = RESULTS / "sanitizer_logs"
 
-BIN = None   # path of the watchtop binary under test (set in main)
-CFG = None   # parsed command-line options (set in main)
+BIN: Path = Path()                                # watchtop binary under test (set in main)
+CFG: argparse.Namespace = argparse.Namespace()    # parsed command-line options (set in main)
 
 
 class Skip(Exception):
     """Raised by a test that cannot run on this machine."""
 
 
-TESTS = []   # (name, function), in registration order
+TestFn = Callable[[], Optional[str]]   # a test returns a short detail text, or nothing
+TESTS: list[tuple[str, TestFn]] = []   # (name, function), in registration order
 
 
-def test(name):
-    def deco(fn):
+def test(name: str) -> Callable[[TestFn], TestFn]:
+    def deco(fn: TestFn) -> TestFn:
         TESTS.append((name, fn))
         return fn
     return deco
@@ -70,14 +72,26 @@ def tool_env():
 def sh(cmd):
     return subprocess.run(cmd, capture_output=True, text=True).stdout
 
+
 ANSI = re.compile(rb"\x1b\[[0-?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b[()][0-9A-Za-z]|\x1b[=>78]")
+
 
 def plain(data):
     """Terminal output without colors and cursor codes, as readable text."""
     return ANSI.sub(b"", data).decode("utf-8", "replace")
 
+
+def is_instrumented():
+    """True if the binary was built with a sanitizer (AddressSanitizer, UBSan or ThreadSanitizer)."""
+    if not shutil.which("readelf"):
+        return False
+    symbols = sh(["readelf", "-sW", str(BIN)])
+    return any(name in symbols for name in ("__asan_init", "__tsan_init", "__ubsan_handle"))
+
+
 def run_once(timeout=30):
     return subprocess.run([str(BIN), "--once"], capture_output=True, timeout=timeout, env=tool_env())
+
 
 def parse_once(raw):
     """Parses the output of `watchtop --once` into (info dict, list of process rows)."""
@@ -159,7 +173,7 @@ print(os.getpid(), ok, port, base, flush=True)
 time.sleep(900)
 '''
 
-HELPERS = []
+HELPERS: list["Helper"] = []
 
 
 class Helper:
@@ -171,6 +185,7 @@ def spawn_helper(n=10, port=False, ign=False, evil=0, inst=1, as_root=False):
     cmd = ["sudo", "-n"] if as_root else []
     cmd += [sys.executable, "-c", HELPER_SRC, str(n), str(int(port)), str(int(ign)), str(evil), str(inst)]
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, text=True)
+    assert proc.stdout is not None
     ready, _, _ = select.select([proc.stdout], [], [], 15)
     assert ready, "helper process did not start in time"
     line = proc.stdout.readline()
@@ -629,6 +644,8 @@ def rss_kb(pid):
 @test("perf: one scan costs little CPU")
 def t_scan_cost():
     import resource
+    if is_instrumented():
+        raise Skip("sanitizer build: it runs 5 to 15 times slower, so CPU numbers mean nothing")
     spawn_helper(n=5)
     run_once()                                   # warm-up
     times = []
@@ -648,6 +665,8 @@ def t_scan_cost():
 
 @test("perf: idle CPU and memory")
 def t_perf():
+    if is_instrumented():
+        raise Skip("sanitizer build: it runs 5 to 15 times slower, so CPU numbers mean nothing")
     seconds = CFG.long or 20
     hz = os.sysconf("SC_CLK_TCK")
     with Tui() as t:
@@ -687,8 +706,7 @@ def t_perf():
 def t_sanitizers():
     if not shutil.which("readelf"):
         raise Skip("readelf not installed")
-    symbols = sh(["readelf", "-sW", str(BIN)])
-    if not any(s in symbols for s in ("__asan_init", "__tsan_init", "__ubsan_handle")):
+    if not is_instrumented():
         raise Skip("binary is not built with a sanitizer")
     reports = sorted(p.name for p in SANITIZER_LOGS.glob("*")) if SANITIZER_LOGS.exists() else []
     assert not reports, f"{len(reports)} report file(s) in tests/results/sanitizer_logs: {', '.join(reports[:3])}"
@@ -727,9 +745,19 @@ def environment():
     }
 
 
+def report_suffix():
+    """Part of the report file name: the label, or 'partial' when only some tests were chosen.
+    This way a partial run can never overwrite the report of a full run."""
+    if CFG.label:
+        return f"-{CFG.label}"
+    if CFG.only or CFG.skip:
+        return "-partial"
+    return ""
+
+
 def write_report(results, meta):
     RESULTS.mkdir(parents=True, exist_ok=True)
-    suffix = f"-{CFG.label}" if CFG.label else ""
+    suffix = report_suffix()
     (RESULTS / f"report{suffix}.json").write_text(json.dumps({"meta": meta, "results": results}, indent=2))
 
     counts = {s: sum(1 for r in results if r["status"] == s) for s in ("PASS", "FAIL", "ERROR", "SKIP")}
@@ -840,7 +868,7 @@ def main():
         cleanup_helpers()
 
     counts = write_report(results, meta)
-    suffix = f"-{CFG.label}" if CFG.label else ""
+    suffix = report_suffix()
     print(f"\n{counts['PASS']} passed, {counts['FAIL']} failed, {counts['ERROR']} errors, {counts['SKIP']} skipped")
     print(f"report: tests/results/report{suffix}.md  (also .json, history.csv)")
     return 1 if counts["FAIL"] or counts["ERROR"] else 0
