@@ -35,7 +35,7 @@ watchtop shows you **who** is using the watches, **whether the number keeps grow
 - [Keyboard controls](#keyboard-controls)
 - [Stopping a process (safely)](#stopping-a-process-safely)
 - [Security and safety](#security-and-safety)
-- [Tests done so far](#tests-done-so-far)
+- [Tests](#tests)
 - [Known limitations](#known-limitations)
 - [Roadmap](#roadmap)
 - [Contributing](#contributing)
@@ -71,7 +71,7 @@ watchtop only **reads** from the `/proc` folder, the information Linux already p
 2. It finds the file descriptors of each process that are inotify instances.
 3. It counts the `inotify wd:` lines in `/proc/<pid>/fdinfo/<fd>`. Each line is one watch.
 4. It finds listening TCP ports by matching the process's sockets with `/proc/net/tcp` and `/proc/net/tcp6`.
-5. It refreshes every second and tracks how the total changes over time.
+5. It refreshes every 2 seconds (change it with `--interval`) and tracks how the total changes over time.
 
 It is **not** a file-event monitor like `inotifywait`. It does not watch your files. It audits the watches that already exist.
 
@@ -80,7 +80,7 @@ It is **not** a file-event monitor like `inotifywait`. It does not watch your fi
 ## Features
 
 - **System status**: the kernel limits, active watches, and usage in % with a color gauge (green, yellow above 60%, red above 80%)
-- **Watch history graph**: the last 60 seconds, with a scale, min / average / max, trend, and an estimate of **when the limit will be reached**
+- **Watch history graph**: the last 60 refreshes (2 minutes at the default interval), with a scale, min / average / max, trend, and an estimate of **when the limit will be reached**
 - **Top consumers**: the 3 heaviest processes with their share of the total
 - **Leak detection**: highlights processes whose watch count keeps growing and never drops
 - **Process table**: PID, name, watch count and listening ports
@@ -88,7 +88,8 @@ It is **not** a file-event monitor like `inotifywait`. It does not watch your fi
 - **Details panel**: fd, watch id, inode and event mask of each watch
 - **Stop a process**: press `k`, confirm, and free a port (see below)
 - **Refresh indicator**: a clear sign when you press `r`
-- **Low CPU use**: only inotify descriptors are parsed, with no regular expressions
+- **Low CPU use**: about 5% at the default 2 second refresh on a machine with 65 processes and 18,700 watches. Reading `/proc` is mostly kernel time, so a longer `--interval` means less CPU
+- **Command line options**: `--interval`, `--once` (one plain-text report, good for scripts), `--version` and `--help`
 
 
 ![History and leak detection](assets/history-leak.png)
@@ -101,6 +102,7 @@ It is **not** a file-event monitor like `inotifywait`. It does not watch your fi
 - Linux (a kernel with `/proc`)
 - A C++20 compiler (GCC 10+ or Clang 14+)
 - CMake 3.16 or newer
+- Python 3, only if you want to run the tests
 - Git and internet access on the first build (the UI library FTXUI is downloaded automatically)
 
 ### Build from source
@@ -128,7 +130,7 @@ The default build type is **Release** (optimized and hardened, see [Security and
 
 ## How to use it
 
-Start it from a terminal. A window of at least **120 columns by 45 rows** is recommended:
+Start it from a terminal. A window of at least **120 columns by 60 rows** is recommended:
 
 ```bash
 ./build/watchtop
@@ -137,6 +139,24 @@ Start it from a terminal. A window of at least **120 columns by 45 rows** is rec
 **Normal user:** you see your own processes. This is enough for most developers.
 
 **With `sudo`:** you also see other users' processes, and the total counts all users. Run it as a normal user unless you need this.
+
+### Options
+
+| Option | What it does |
+|--------|--------------|
+| `--interval N` | Seconds between refreshes, 1 to 60 (default 2). A longer interval uses less CPU |
+| `--once` | Print one plain-text report and exit. Useful in scripts |
+| `--version` | Print the version |
+| `-h`, `--help` | Show the help |
+
+The `--once` report has a few header lines, then one tab-separated line per process (PID, name, watches, ports):
+
+```
+#watchtop 0.1.0
+max_user_watches=65536
+total_watches=18710
+processes=65
+```
 
 ### Example: "port 3000 is already in use"
 
@@ -181,8 +201,6 @@ Press `k` on a selected process to open a confirmation box with its name, PID, p
 | `f` | **SIGKILL**: force kill, no cleanup (use if SIGTERM was ignored) |
 | `Esc` or `n` | Cancel, nothing is sent |
 
-<!-- IMAGE 4: The kill confirmation box centered over the dashboard
-     (name, PID, ports, watches, and the three key lines). -->
 ![Kill confirmation](assets/kill-dialog.png)
 
 Protections:
@@ -207,7 +225,7 @@ watchtop is a diagnostic tool, so it is designed to do as little as possible.
 - It does not write files, change kernel settings, or need root for normal use.
 
 **Hardening in this version**
-- **Terminal escape protection:** process names are chosen by their owner, so control characters are replaced with `?` before display. Another user cannot clear your screen or change your window title by naming a process.
+- **Terminal escape protection:** process names are chosen by their owner, so control characters (including the UTF-8 form of C1 controls, U+0080 to U+009F) are replaced with `?` before display. Another user cannot clear your screen or change your window title by naming a process.
 - **No crashes from `/proc` changes:** processes that exit while scanning are skipped, and number parsing never throws.
 - **No data race:** a background thread reads `/proc` and sends finished data to the UI thread. Only the UI thread touches the screen data.
 - **Bounded work:** the details list draws at most 500 rows, even if a process owns 100,000+ watches.
@@ -218,28 +236,49 @@ If you find a security issue, please open a GitHub issue. For a serious vulnerab
 
 ---
 
-## Tests done so far
+## Tests
 
-Tested on **Debian** only, as a normal user, on a physical machine. This is an early release, so please report problems.
+watchtop has an automated test suite. It needs only Python 3 (standard library) and a built binary, and takes about a minute and a half:
 
-| Test | Result |
-|------|--------|
-| Clean build from scratch (GCC 14.2) with `-Wall -Wextra -Wpedantic -Wshadow` | 0 errors, 0 warnings |
-| Binary hardening (`readelf`): `BIND_NOW`, PIE, stack protector, Release build type | Confirmed |
-| Real watch-heavy apps: **Vite dev server**, **Next.js dev server** (`next-server`), Node.js | Listed with their watch counts and ports |
-| Test program in C that adds watches rapidly | Two copies detected as **Possible leak**, `next-server` was **not** flagged (no false alarm) |
-| Growth and forecast (1392 → 2710 watches in 1 minute) | Graph, trend and "limit reached in ~49 min" matched the real numbers |
-| Usage display with small values | Shows `4.14%` with a gauge (not `0%`) |
-| Search box, typing `q`, `r`, `k` | Letters are typed, shortcuts are not triggered |
+```bash
+python3 tests/run_tests.py
+```
 
-**Still to verify** (update this table when done):
-- [ ] Watch counts compared with `grep -c '^inotify' /proc/<pid>/fdinfo/<fd>`
-- [ ] 200 short-lived processes started while watchtop runs (no crash)
-- [ ] Process name with escape characters (shown as `?`)
-- [ ] Kill dialog: SIGTERM, SIGKILL, cancel, and refusal for another user's process
+![Automated test run](assets/tests.png)
+
+Each test ends as **PASS**, **FAIL**, **ERROR** (the test itself crashed) or **SKIP** (it cannot run on this machine). The results are saved in `tests/results/`: `report.md` (the table), `report.json` and `history.csv`. The report names the commit and marks uncommitted changes.
+
+**What the 31 tests check**
+
+| Group | What it checks |
+|-------|----------------|
+| Build | The binary exists, the build type is Release, and the binary has PIE, `BIND_NOW` and a stack protector |
+| Command line | `--version` matches `CMakeLists.txt`, `--help` works, unknown options are rejected, `--interval` accepts 1 to 60 only |
+| Accuracy | The watch count equals the real count from `/proc` for 1, 15, 16, 17, 300 and 2000 watches, and for 3 inotify instances in one process |
+| Ports | A listening TCP port is reported for its process |
+| Security | Escape codes and C1 control characters in a process name are neutralized. A normal user cannot see another user's process |
+| Stability | `--once` and the dashboard both survive 300 short-lived processes, in 3 rounds |
+| Dashboard | Starts and quits with `q`, restores the terminal, letters typed in search are not shortcuts, `r` shows "Refreshed!" |
+| Kill | `Esc` cancels, `Enter` sends exactly SIGTERM, `f` sends exactly SIGKILL when SIGTERM is ignored |
+| Performance | CPU cost of one scan, and idle CPU and memory over 20 seconds |
+| Sanitizers | No AddressSanitizer, UBSan or ThreadSanitizer report was written (for sanitizer builds) |
+
+**Latest result:** Debian 13 (trixie), GCC 14.2, normal user, physical machine. **29 passed, 0 failed, 2 skipped.** The skipped tests need passwordless `sudo` and a sanitizer build.
+
+| Measured | Result |
+|----------|--------|
+| Watch counts on a real machine (65 processes, 18,710 watches) | Exact, equal to `/proc` |
+| Idle CPU at the default 2 second interval | 5.1% average, 5.3% peak |
+| Memory over 20 seconds | About 6 to 9 MB, no growth |
+| One scan | About 60 ms of CPU |
+
+Useful options: `--list`, `--only kill,count`, `--skip perf`, `--long 1800` (a 30 minute CPU and memory run), and `--bin build-asan/watchtop --label asan` (run the same tests against another build).
+
+**Still to verify** (this list will shrink as the tests are run):
 - [ ] Run as root
-- [ ] Run for 30 minutes (CPU close to zero between refreshes, stable memory)
-- [ ] ThreadSanitizer and AddressSanitizer builds
+- [ ] AddressSanitizer, UBSan and ThreadSanitizer builds
+- [ ] A 30 minute run
+- [ ] Another user's process (needs passwordless `sudo`)
 - [ ] Ubuntu, Fedora and Arch
 - [ ] Docker and other containers
 
@@ -253,7 +292,8 @@ Tested on **Debian** only, as a normal user, on a physical machine. This is an e
 - **The kernel limit is per user.** When you run as root, watchtop adds up all users, so that number is not compared against a single user's limit.
 - **Processes that share an inotify instance** (for example after `fork`) may each report its watches, so the total can be higher than the kernel's real count.
 - **Containers:** not tested yet. Inside a container, `/proc` normally shows only the container's own processes.
-- **Terminal size:** needs a wide terminal (about 120 columns) for the graph and panels.
+- **Terminal size:** needs a large terminal, about 120 columns by 60 rows.
+- **Leak detection needs time:** about 20 seconds of data at the default interval.
 - **Early software:** tested on Debian only so far.
 
 ---
@@ -261,11 +301,11 @@ Tested on **Debian** only, as a normal user, on a physical machine. This is an e
 ## Roadmap
 
 **Next (v0.2):**
-- `--version`, `--help`, `--interval <seconds>` and `--once` (print a report and exit, useful for scripts)
 - A hint on how to raise the limit (`sudo sysctl fs.inotify.max_user_watches=524288`)
 - Sorting the table by watches, PID or name
 - A banner when running without root ("showing your processes only")
-- `LICENSE` file, `CHANGELOG.md` and pre-built binaries
+- `CHANGELOG.md` and pre-built binaries
+- GitHub Actions to run the tests on every push
 
 **Then:**
 - Test on Ubuntu, Fedora, Arch and other distributions
@@ -273,7 +313,8 @@ Tested on **Debian** only, as a normal user, on a physical machine. This is an e
 - Show the real watched paths where possible
 - Per-user usage view when running as root
 - UDP ports, and optional kill of a whole process group (with confirmation)
-- JSON output and automated tests in CI
+- JSON output
+- Lower CPU by remembering which file descriptors are inotify (new watchers must still appear quickly)
 
 Ideas are welcome, please open an issue.
 
@@ -286,8 +327,9 @@ Contributions are welcome. Please open an issue to discuss a change before sendi
 1. Fork the repository
 2. Create a feature branch
 3. Build with `-Wall -Wextra` and make sure there are no warnings
-4. Commit with a clear message (for example `fix(scanner): ...`)
-5. Open a pull request
+4. Run `python3 tests/run_tests.py` and make sure nothing fails
+5. Commit with a clear message (for example `fix(scanner): ...`)
+6. Open a pull request
 
 ---
 
