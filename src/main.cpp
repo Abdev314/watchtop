@@ -95,8 +95,18 @@ int run_dashboard(int interval) {
     std::atomic<bool> refresh_requested{false};
     const int ticks_per_refresh = interval * 10;   // one tick = 100 ms
 
-    // "q" closes the UI loop; "r" only raises a flag that the worker thread reads.
-    Dashboard dashboard(screen.ExitLoopClosure(),
+    // The worker thread calls screen.Post(). FTXUI resets its internal message channel when
+    // the loop exits, so Post() must never run at the same time as the exit (a data race that
+    // ThreadSanitizer reports). Quitting therefore stops and joins the worker FIRST.
+    std::thread worker;
+    auto stop_worker = [&] {
+        running = false;
+        if (worker.joinable()) worker.join();
+    };
+
+    // "q" (and Ctrl+C): stop the scanning thread, then leave the loop.
+    // "r" only raises a flag that the worker thread reads.
+    Dashboard dashboard([&] { stop_worker(); screen.Exit(); },
                         [&] { refresh_requested = true; },
                         interval);
 
@@ -109,7 +119,7 @@ int run_dashboard(int interval) {
 
     // Worker thread: reads /proc and sends a finished copy of the data to the UI thread.
     // It never touches the Dashboard directly, which removes the data race.
-    std::thread worker([&] {
+    worker = std::thread([&] {
         pthread_setname_np(pthread_self(), "wt-scan");   // shows up in top -H and in the test report
         int ticks = 0;
         while (running) {
@@ -134,8 +144,7 @@ int run_dashboard(int interval) {
 
     screen.Loop(dashboard.GetComponent());
 
-    running = false;
-    worker.join();
+    stop_worker();   // already stopped if the user quit; this covers any other way out of the loop
     return 0;
 }
 
