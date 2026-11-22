@@ -21,7 +21,6 @@ FetchContent_Declare(
   ftxui
   GIT_REPOSITORY https://github.com/ArthurSonzogni/FTXUI.git
   GIT_TAG        cdf28903a7781f97ba94d30b79c3a4b0c97ccce7       
-  GIT_SHALLOW    TRUE
 )
 FetchContent_MakeAvailable(ftxui)
 
