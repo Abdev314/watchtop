@@ -36,3 +36,7 @@ build*/
 perf.data*
 watchtop_review.txt
 updates.txt
+build_log.txt
+tests/results/sanitizer_logs/
+tests/results/*.json
+tests/results/history.csv
