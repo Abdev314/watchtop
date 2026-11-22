@@ -12,6 +12,10 @@ class HistoryTracker {
 
         void add_sample(uint64_t count);
 
+        // Seconds between samples (the refresh interval). Used for the graph labels
+        // and for merging samples that arrive too close together.
+        void set_interval(int seconds);
+
         // `limit` is max_user_watches (0 = unknown).
         ftxui::Element render(uint64_t limit) const;
 
@@ -22,4 +26,5 @@ class HistoryTracker {
         };
         std::vector<Sample> history_;
         size_t max_points_;
+        int interval_ = 1;
 };

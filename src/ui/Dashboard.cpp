@@ -50,10 +50,13 @@ std::string num(double v, int decimals) {
 
 } // namespace
 
-Dashboard::Dashboard(std::function<void()> on_quit, std::function<void()> on_refresh)
+Dashboard::Dashboard(std::function<void()> on_quit, std::function<void()> on_refresh, int refresh_seconds)
     : on_quit_(std::move(on_quit)),
       on_refresh_(std::move(on_refresh)),
-      is_root_(geteuid() == 0) {
+      is_root_(geteuid() == 0),
+      refresh_seconds_(refresh_seconds) {
+
+    history_tracker_.set_interval(refresh_seconds_);
 
     watch_details_ = std::make_unique<WatchDetails>();
 
@@ -252,7 +255,7 @@ Element Dashboard::RefreshStatus() const {
         return text(" ⟳ Refreshing... ") | bold | color(Color::Black) | bgcolor(Color::Yellow);
     if (std::chrono::steady_clock::now() < manual_flash_until_)
         return text(" ✔ Refreshed! ") | bold | color(Color::Black) | bgcolor(Color::Green);
-    return text("Auto-refresh: every 1s") | dim;
+    return text("Auto-refresh: every " + std::to_string(refresh_seconds_) + "s") | dim;
 }
 
 // Bottom line: the result of the last kill for a few seconds, otherwise the key help.

@@ -41,6 +41,7 @@ add_executable(watchtop
 
 target_include_directories(watchtop PRIVATE src)
 target_link_libraries(watchtop PRIVATE ftxui::screen ftxui::dom ftxui::component)
+target_compile_definitions(watchtop PRIVATE WATCHTOP_VERSION="${PROJECT_VERSION}")
 
 # Warnings and security hardening for our own code.
 target_compile_options(watchtop PRIVATE

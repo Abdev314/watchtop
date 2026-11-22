@@ -41,11 +41,15 @@ HistoryTracker::HistoryTracker(size_t max_points) : max_points_(max_points) {
     history_.reserve(max_points_ + 1);
 }
 
+void HistoryTracker::set_interval(int seconds) {
+    interval_ = std::max(1, seconds);
+}
+
 // Stores one sample. Samples closer than 0.5 s are ignored, so pressing "r"
 // does not add an extra bar and one graph column always equals one second.
 void HistoryTracker::add_sample(uint64_t count) {
     const auto now = std::chrono::steady_clock::now();
-    if (!history_.empty() && now - history_.back().time < std::chrono::milliseconds(500)) {
+    if (!history_.empty() && now - history_.back().time < std::chrono::milliseconds(500 * interval_)) {
         history_.back().value = count;   // just update the newest value
         return;
     }
@@ -111,7 +115,7 @@ Element HistoryTracker::render(uint64_t limit) const {
     }
 
     // Time axis under the graph.
-    const std::string left_time = "-" + format_duration(static_cast<double>(cols));
+    const std::string left_time = "-" + format_duration(static_cast<double>(cols) * interval_);
     graph_rows.push_back(hbox({
         text("") | size(WIDTH, EQUAL, 10),
         text(left_time) | dim,
@@ -141,7 +145,8 @@ Element HistoryTracker::render(uint64_t limit) const {
                   : "";
 
     Elements rows;
-    rows.push_back(text("Watch History: total watches over time (1 column = 1 second)") | bold);
+    rows.push_back(text("Watch History: total watches over time (1 column = " + std::to_string(interval_) +
+                        (interval_ == 1 ? " second)" : " seconds)")) | bold);
     for (auto& g : graph_rows) rows.push_back(std::move(g));
     rows.push_back(hbox({text("Now: "), text(std::to_string(now_v)) | bold, text(of_limit) | dim}));
     rows.push_back(text("Min: " + std::to_string(lo) + "   Avg: " + num(avg, 0) +

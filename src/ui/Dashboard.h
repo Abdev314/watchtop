@@ -18,7 +18,7 @@
 // Main screen. Every method must be called from the UI thread only.
 class Dashboard {
     public:
-        Dashboard(std::function<void()> on_quit, std::function<void()> on_refresh);
+        Dashboard(std::function<void()> on_quit, std::function<void()> on_refresh, int refresh_seconds);
 
         ftxui::Component GetComponent();
 
@@ -60,6 +60,7 @@ class Dashboard {
         std::function<void()> on_quit_;
         std::function<void()> on_refresh_;
         bool is_root_;
+        int  refresh_seconds_;   // seconds between automatic refreshes
 
         InotifyLimits limits_;
         std::vector<ProcessWatchInfo>        all_processes_;   // the only copy of the data
