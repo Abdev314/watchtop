@@ -309,7 +309,9 @@ Contributions are welcome. Please open an issue to discuss a change before sendi
 
 ## License
 
-Distributed under the [MIT License](LICENSE). See the `LICENSE` file for details.
+[MIT License](LICENSE).
+
 ---
 
 <p align="center">Made for Linux developers</p>
+
