@@ -231,7 +231,7 @@ watchtop is a diagnostic tool, so it is designed to do as little as possible.
 - **Hardened build:** Release by default, `-fstack-protector-strong`, `-fstack-clash-protection`, `-D_FORTIFY_SOURCE=2`, PIE, full RELRO and `BIND_NOW`, and warnings enabled (`-Wall -Wextra -Wpedantic -Wshadow`).
 
 **Reporting a problem**
-If you find a security issue, please open a GitHub issue. For a serious vulnerability, contact the maintainer privately first.
+If you find a security issue, please open a GitHub issue.
 
 ---
 
@@ -274,8 +274,7 @@ Each test ends as **PASS**, **FAIL**, **ERROR** (the test itself crashed) or **S
 Useful options: `--list`, `--only kill,count`, `--skip perf`, `--long 1800` (a 30 minute CPU and memory run), and `--bin build-asan/watchtop --label asan` (run the same tests against another build).
 
 **Still to verify** (this list will shrink as the tests are run):
-- [ ] AddressSanitizer, UBSan and ThreadSanitizer builds
-- [ ] Ubuntu, Fedora and Arch
+- [ ] Other Linux distributions, Arch and REDH based
 - [ ] Docker and other containers
 
 ---
@@ -294,22 +293,19 @@ Useful options: `--list`, `--only kill,count`, `--skip perf`, `--long 1800` (a 3
 
 ---
 
-
 ## Contributing
 
-Contributions are welcome. Please open an issue to discuss a change before sending a pull request.
+WatchTop is an open-source project, and contributions are welcome. Whether you're improving process scanning, refining the terminal dashboard, expanding Linux compatibility, fixing bugs, or improving documentation, there's always room to make the project better.
 
-1. Fork the repository
-2. Create a feature branch
-3. Build with `-Wall -Wextra` and make sure there are no warnings
-4. Run `python3 tests/run_tests.py` and make sure nothing fails
-5. Open a pull request
+Start with [CONTRIBUTING.md](https://github.com/Abdev314/watchtop/blob/main/CONTRIBUTING.md) for development guidelines and contribution details.
+
+Report bugs or suggest new features through [GitHub Issues](https://github.com/Abdev314/watchtop/issues). Use [GitHub Discussions](https://github.com/Abdev314/watchtop/discussions) for questions, feedback, and early ideas.
 
 ---
 
 ## License
 
-[MIT License](LICENSE).
+Watchtop is open-source software released under the [MIT License](LICENSE). You may use, study, modify, and distribute it under the terms of that license.
 
 ---
 
